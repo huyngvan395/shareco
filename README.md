@@ -1,6 +1,6 @@
 # shareco
 
-A new Flutter project about ecommerce
+A new Flutter project about ecommerce and social
 
 ## Getting Started
 
