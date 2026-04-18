@@ -9,4 +9,6 @@ class LoginUseCase {
   Future<AuthSession> call(String email, String password, String type) {
     return repository.login(email, password, type);
   }
+
+
 }

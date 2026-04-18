@@ -1,11 +1,19 @@
 import 'dart:ui';
 
-const bgColor1 = Color(0xFF09132A);
-const bgColor2 = Color(0xFF2D1B69);
+const primaryOrange = Color(0xFFFFB347);
 
-const bgColorForm = Color(0xFF252525);
+const primaryPink = Color(0xFFFF5FA2);
 
-const borderColor = Color(0xFFFDFDFD);
+const primaryPurple = Color(0xFF9B5CFF);
+
+const primaryBlue = Color(0xFF4A6CFF);
+
+const secondaryGray = Color(0xFF808080);
 
 
-
+const List<Color> brandGradient = [
+  primaryOrange,
+  primaryPink,
+  primaryPurple,
+  primaryBlue,
+];

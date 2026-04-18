@@ -5,7 +5,11 @@ import 'package:shareco/features/auth/presentation/bloc/login/login_bloc.dart';
 import 'package:shareco/features/auth/presentation/bloc/login/login_state.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final GoRouterState state;
+  const LoginScreen({
+    super.key,
+    required this.state
+  });
 
   @override
   State<StatefulWidget> createState() => _LoginState();
@@ -78,6 +82,7 @@ class _LoginState extends State<LoginScreen> {
                       setState(() {
                         showPass = !showPass;
                       });
+
                     },
                   ),
                 ),

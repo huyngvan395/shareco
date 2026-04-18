@@ -1,6 +1,9 @@
+
+import 'package:shareco/core/services/supabase/index.dart';
 import 'package:shareco/features/auth/data/datasources/auth_remote_datasources.dart';
 import 'package:shareco/features/auth/domain/entities/auth_session.dart';
 import 'package:shareco/features/auth/domain/repositories/auth_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthRepositoryImpl implements AuthRepository{
   final AuthRemoteDataSource remoteDataSource;
@@ -26,6 +29,11 @@ class AuthRepositoryImpl implements AuthRepository{
   Future<AuthSession> register(String email, String password, String type) {
     // TODO: implement register
     throw UnimplementedError();
+  }
+
+  @override
+  Session? getCurrentSession() {
+    return SupabaseService.client.auth.currentSession;
   }
 
 }

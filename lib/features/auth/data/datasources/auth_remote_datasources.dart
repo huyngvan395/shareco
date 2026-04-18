@@ -19,6 +19,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         email: email,
         password: password,
       );
+    } else if (type == 'google'){
+      res = (await client.auth.signInWithOAuth(
+        OAuthProvider.google,
+      )) as AuthResponse?;
     }
     return res?.session;
   }

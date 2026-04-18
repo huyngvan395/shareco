@@ -4,7 +4,9 @@ import 'package:shareco/features/auth/data/datasources/auth_remote_datasources.d
 import 'package:shareco/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:shareco/features/auth/domain/repositories/auth_repository.dart';
 import 'package:shareco/features/auth/domain/usecases/login_usecase.dart';
+import 'package:shareco/features/auth/domain/usecases/register_usecase.dart';
 import 'package:shareco/features/auth/presentation/bloc/login/login_bloc.dart';
+import 'package:shareco/features/auth/presentation/bloc/register/register_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final sl = GetIt.instance;
@@ -22,5 +24,11 @@ Future<void> initInjector() async {
   );
   sl.registerFactory<LoginBloc>(
       () => LoginBloc(sl())
+  );
+  sl.registerLazySingleton<RegisterUseCase>(
+      () => RegisterUseCase(sl())
+  );
+  sl.registerFactory<RegisterBloc>(
+      () => RegisterBloc(sl())
   );
 }
