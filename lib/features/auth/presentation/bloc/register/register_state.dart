@@ -1,13 +1,32 @@
-abstract class RegisterState {}
+// features/auth/presentation/bloc/register/register_state.dart
 
-class RegisterInitial extends RegisterState {}
+import 'package:equatable/equatable.dart';
+import '../../../domain/entities/auth_session.dart';
 
-class RegisterLoading extends RegisterState {}
+abstract class RegisterState extends Equatable {
+  const RegisterState();
+  @override
+  List<Object?> get props => [];
+}
 
-class RegisterSuccess extends RegisterState {}
+class RegisterInitial extends RegisterState {
+  const RegisterInitial();
+}
+
+class RegisterLoading extends RegisterState {
+  const RegisterLoading();
+}
+
+class RegisterSuccess extends RegisterState {
+  final AuthSession session;
+  const RegisterSuccess(this.session);
+  @override
+  List<Object?> get props => [session];
+}
 
 class RegisterFailure extends RegisterState {
-  final String errorMessage;
-
-  RegisterFailure(this.errorMessage);
+  final String message;
+  const RegisterFailure(this.message);
+  @override
+  List<Object?> get props => [message];
 }

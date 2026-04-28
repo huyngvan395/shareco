@@ -1,20 +1,34 @@
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shareco/features/auth/domain/usecases/login_usecase.dart';
-import 'package:shareco/features/auth/presentation/bloc/login/login_event.dart';
-import 'package:shareco/features/auth/presentation/bloc/login/login_state.dart';
+// features/auth/presentation/bloc/login/login_bloc.dart
 
-class LoginBloc extends Bloc<LoginEvent, LoginState>{
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../domain/usecases/login_usecase.dart';
+import 'login_event.dart';
+import 'login_state.dart';
+
+class LoginBloc extends Bloc<LoginEvent, LoginState> {
   final LoginUseCase loginUseCase;
 
-  LoginBloc(this.loginUseCase): super(LoginInitial()){
-    on<LoginSubmitted>((event, emit) async{
-        emit(LoginLoading());
-        try{
-          await loginUseCase.call(event.email, event.password, 'password');
-          emit(LoginSuccess());
-        }catch (e){
-          emit(LoginFailure(e.toString()));
-        }
-    });
+  LoginBloc({required this.loginUseCase}) : super(LoginInitial()) {
+    on<LoginSubmitted>(_onSubmitted);
+    on<LoginReset>(_onReset);
+  }
+
+  Future<void> _onSubmitted(
+      LoginSubmitted event,
+      Emitter<LoginState> emit,
+      ) async {
+    emit(LoginLoading());
+    final result = await loginUseCase(
+      email: event.email,
+      password: event.password,
+    );
+    result.fold(
+          (failure) => emit(LoginFailure(failure.message)),
+          (session) => emit(LoginSuccess(session)),
+    );
+  }
+
+  void _onReset(LoginReset event, Emitter<LoginState> emit) {
+    emit(LoginInitial());
   }
 }

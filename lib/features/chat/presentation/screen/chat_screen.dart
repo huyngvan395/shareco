@@ -4,15 +4,14 @@ class ChatScreen extends StatefulWidget{
   const ChatScreen({super.key});
 
   @override
-  State<StatefulWidget> createState() => _ChatState();
+  State<StatefulWidget> createState() => _ChatScreenState();
 
 }
 
-class _ChatState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return Text("Chat Screen");
   }
 
 }

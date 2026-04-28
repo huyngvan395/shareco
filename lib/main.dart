@@ -9,7 +9,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
   await SupabaseService.init();
-  await initInjector();
+  await setupInjector();
   final authNotifier = AuthNotifier();
   runApp(App(authNotifier: authNotifier));
 }
