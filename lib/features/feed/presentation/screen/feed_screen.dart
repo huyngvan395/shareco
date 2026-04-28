@@ -4,14 +4,13 @@ import 'package:flutter/material.dart';
 class FeedScreen extends StatefulWidget{
   const FeedScreen({super.key});
   @override
-  State<StatefulWidget> createState() => _FeedState();
+  State<StatefulWidget> createState() => _FeedScreenState();
 }
 
-class _FeedState extends State<FeedScreen>{
+class _FeedScreenState extends State<FeedScreen>{
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
-    throw UnimplementedError();
+    return Text("Feed Screen");
   }
 
 

@@ -3,29 +3,26 @@ import 'package:shareco/core/services/supabase/index.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthNotifier extends ChangeNotifier {
-  bool _isAuthenticated = false;
-
-  bool get isAuthenticated => _isAuthenticated;
-
+  Session? _session;
   AuthNotifier() {
-    _isAuthenticated = SupabaseService.client.auth.currentSession != null;
-    SupabaseService.client.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-
-      switch (event) {
-        case AuthChangeEvent.signedIn:
-          _isAuthenticated = true;
-          notifyListeners();
-          break;
-        case AuthChangeEvent.signedOut:
-          _isAuthenticated = false;
-          notifyListeners();
-          break;
-        default:
-          if (kDebugMode) {
-            debugPrint('No event!');
-          }
-      }
+    _session = SupabaseService.auth.currentSession;
+    SupabaseService.auth.onAuthStateChange.listen((data){
+      _session = data.session;
+      notifyListeners();
     });
+  }
+  Session? get session => _session;
+  bool get isAuthenticated => _session != null;
+  String? get userId => _session?.user.id;
+  VoidCallback? pendingAction;
+
+  void setPendingAction(VoidCallback? action) {
+    pendingAction = action;
+  }
+
+  void executePendingAction() {
+    final action = pendingAction;
+    pendingAction = null;
+    action?.call();
   }
 }

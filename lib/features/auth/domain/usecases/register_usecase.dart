@@ -1,13 +1,22 @@
-import 'package:shareco/features/auth/domain/entities/auth_session.dart';
-import 'package:shareco/features/auth/domain/repositories/auth_repository.dart';
+// features/auth/domain/usecases/register_usecase.dart
+
+import 'package:dartz/dartz.dart';
+import '../../../../core/errors/failure.dart';
+import '../entities/auth_session.dart';
+import '../repositories/auth_repository.dart';
 
 class RegisterUseCase {
   final AuthRepository repository;
+  const RegisterUseCase(this.repository);
 
-  RegisterUseCase(this.repository);
-
-  Future<AuthSession> call(String email, String password, String type) {
-    return repository.register(email, password, type);
-  }
-
+  Future<Either<Failure, AuthSession>> call({
+    required String email,
+    required String password,
+    required String username,
+  }) =>
+      repository.register(
+        email: email,
+        password: password,
+        username: username,
+      );
 }
