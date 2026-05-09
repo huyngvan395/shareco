@@ -1,3 +1,4 @@
+
 // core/layout/main_scaffold.dart
 //
 // MainScaffold dùng StatefulShellRoute của GoRouter.
