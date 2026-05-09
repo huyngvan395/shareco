@@ -25,8 +25,6 @@ class MainScaffold extends StatelessWidget {
 
   const MainScaffold({super.key, required this.navigationShell});
 
-  static const _authRequiredTabs = {2, 3, 4}; // Create, Chat, Profile
-
   static const _navToBranch = {
     0: 0, // feed
     1: 1, // ecommerce
@@ -68,10 +66,7 @@ class MainScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.background,
       // navigationShell.currentIndex theo dõi tab hiện tại
-      body: SafeArea(
-        bottom: false,
-        child: navigationShell,
-      ),
+      body: SafeArea(bottom: false, child: navigationShell),
       bottomNavigationBar: AppNavbar(
         currentIndex: navIndex,
         onTap: (index) => _onTabTap(context, index),

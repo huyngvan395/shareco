@@ -44,18 +44,12 @@ extension RequireAuthExtension on BuildContext {
   ///
   /// [runAfterLogin] — có thực thi action sau khi login hay không.
   ///   Mặc định true. Set false nếu chỉ muốn mở sheet mà không cần callback.
-  void requireAuth(
-      VoidCallback action, {
-        bool runAfterLogin = true,
-      }) {
+  void requireAuth(VoidCallback action, {bool runAfterLogin = true}) {
     final auth = sl<AuthNotifier>();
     if (auth.isAuthenticated) {
       action();
     } else {
-      AuthBottomSheet.show(
-        this,
-        pendingAction: runAfterLogin ? action : null,
-      );
+      AuthBottomSheet.show(this, pendingAction: runAfterLogin ? action : null);
     }
   }
 
@@ -85,20 +79,19 @@ class AuthGuard extends StatelessWidget {
   /// Nếu null và chưa đăng nhập, widget sẽ ẩn (SizedBox.shrink).
   final Widget? fallback;
 
-  const AuthGuard({
-    super.key,
-    required this.child,
-    this.fallback,
-  });
+  const AuthGuard({super.key, required this.child, this.fallback});
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: sl<AuthNotifier>(),
-      builder: (_, __) {
-        if (sl<AuthNotifier>().isAuthenticated) return child;
+      builder: (context, guardedChild) {
+        if (sl<AuthNotifier>().isAuthenticated) {
+          return guardedChild ?? child;
+        }
         return fallback ?? const SizedBox.shrink();
       },
+      child: child,
     );
   }
 }

@@ -1,6 +1,23 @@
 // di/injector.dart
 
 import 'package:get_it/get_it.dart';
+import 'package:shareco/core/services/cloudinary/cloudinary_service.dart';
+import 'package:shareco/features/chat/data/datasources/chat_remote_datasource.dart';
+import 'package:shareco/features/chat/data/repositories/chat_repository_impl.dart';
+import 'package:shareco/features/chat/domain/repositories/chat_repository.dart';
+import 'package:shareco/features/chat/domain/usecases/chat_usecases.dart';
+import 'package:shareco/features/chat/presentation/bloc/conversation_bloc.dart';
+import 'package:shareco/features/chat/presentation/bloc/message_bloc.dart';
+import 'package:shareco/features/comment/data/datasources/comment_remote_datasource.dart';
+import 'package:shareco/features/comment/data/repositories/comment_repository_impl.dart';
+import 'package:shareco/features/comment/domain/repositories/comment_repository.dart';
+import 'package:shareco/features/comment/presentation/bloc/comment_bloc.dart';
+import 'package:shareco/features/notification/data/datasources/notification_remote_datasource.dart';
+import 'package:shareco/features/notification/data/repositories/notification_repository_impl.dart';
+import 'package:shareco/features/notification/domain/repositories/notification_repository.dart';
+import 'package:shareco/features/video/presentation/bloc/camera_bloc.dart';
+import 'package:shareco/features/video/presentation/bloc/create_video_bloc.dart';
+
 import '../core/notifier/auth_notifier.dart';
 import '../core/theme/theme_provider.dart';
 import '../features/auth/data/datasources/auth_remote_datasources.dart';
@@ -58,51 +75,31 @@ import '../features/ecommerce/shop/domain/repositories/shop_repository.dart';
 import '../features/ecommerce/shop/domain/usecases/get_shop_detail_usecase.dart';
 import '../features/ecommerce/shop/domain/usecases/get_shop_products_usecase.dart';
 import '../features/ecommerce/shop/presentation/bloc/shop_profile_bloc.dart';
+import '../features/feed/presentation/bloc/feed_bloc.dart';
+import '../features/profile/data/datasources/profile_remote_datasource.dart';
+import '../features/profile/data/repositories/profile_repository_impl.dart';
+import '../features/profile/domain/repositories/profile_repository.dart';
+import '../features/video/data/datasources/video_remote_datasource.dart';
+import '../features/video/data/repositories/video_repository_impl.dart';
+import '../features/video/domain/repositories/video_repository.dart';
+import '../features/video/domain/usecases/video_usecases.dart';
 
 final sl = GetIt.instance;
 
 Future<void> setupInjector() async {
-  // ── Core ────────────────────────────────────────────────────────────────────
   sl.registerLazySingleton(() => ThemeProvider());
   sl.registerLazySingleton(() => AuthNotifier());
+  sl.registerLazySingleton(() => CloudinaryService());
 
-  // ── Auth: DataSources ────────────────────────────────────────────────────────
   sl.registerLazySingleton<AuthRemoteDataSource>(
-        () => AuthRemoteDataSourceImpl(),
+    () => AuthRemoteDataSourceImpl(),
   );
-
-  // ── Auth: Repository ─────────────────────────────────────────────────────────
   sl.registerLazySingleton<AuthRepository>(
-        () => AuthRepositoryImpl(remoteDataSource: sl()),
+    () => AuthRepositoryImpl(remoteDataSource: sl()),
   );
-
-  // ── Auth: UseCases ───────────────────────────────────────────────────────────
   sl.registerLazySingleton(() => LoginUseCase(sl()));
   sl.registerLazySingleton(() => RegisterUseCase(sl()));
 
-  // ── Feed: DataSources ────────────────────────────────────────────────────────
-  // sl.registerLazySingleton<FeedRemoteDataSource>(
-  //       () => FeedRemoteDataSourceImpl(),
-  // );
-  //
-  // // ── Feed: Repository ─────────────────────────────────────────────────────────
-  // sl.registerLazySingleton<FeedRepository>(
-  //       () => FeedRepositoryImpl(remoteDataSource: sl()),
-  // );
-  //
-  // // ── Feed: UseCases ───────────────────────────────────────────────────────────
-  // sl.registerLazySingleton(() => GetFeedUseCase(sl()));
-  // sl.registerLazySingleton(() => ToggleVideoLikeUseCase(sl()));
-  // sl.registerLazySingleton(() => TogglePostLikeUseCase(sl()));
-  //
-  // // ── Feed: BLoC (factory — fresh instance per BlocProvider) ───────────────────
-  // sl.registerFactory(
-  //       () => FeedBloc(
-  //     getFeedUseCase: sl(),
-  //     toggleVideoLikeUseCase: sl(),
-  //     togglePostLikeUseCase: sl(),
-  //   ),
-  // );
 
   // Ecommerce: Product
   sl.registerLazySingleton<ProductRemoteDataSource>(
@@ -223,5 +220,85 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton(() => GetProductReviewsUseCase(repository: sl()));
   sl.registerFactory(
     () => ReviewBloc(submitReviewUseCase: sl()),
+  );
+  sl.registerLazySingleton<VideoRemoteDataSource>(
+    () => VideoRemoteDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<VideoRepository>(
+    () => VideoRepositoryImpl(remote: sl()),
+  );
+  sl.registerLazySingleton(() => GetForYouFeedUseCase(sl()));
+  sl.registerLazySingleton(() => GetFollowingFeedUseCase(sl()));
+  sl.registerLazySingleton(() => GetUserVideosUseCase(sl()));
+  sl.registerLazySingleton(() => GetVideoByIdUseCase(sl()));
+  sl.registerLazySingleton(() => ToggleVideoLikeUseCase(sl()));
+  sl.registerLazySingleton(() => IncrementVideoViewUseCase(sl()));
+  sl.registerLazySingleton(() => CreateVideoUseCase(sl()));
+  sl.registerLazySingleton(() => DeleteVideoUseCase(sl()));
+
+  sl.registerFactory(
+    () => FeedBloc(
+      getForYouFeed: sl(),
+      getFollowingFeed: sl(),
+      toggleVideoLike: sl(),
+      incrementView: sl(),
+    ),
+  );
+
+  // CameraBloc: factory so each CameraScreen gets a fresh instance
+  sl.registerFactory(() => CameraBloc());
+  // CreateVideoBloc: factory per edit session
+  sl.registerFactory(() => CreateVideoBloc(createVideo: sl()));
+
+  // Comment
+  sl.registerLazySingleton<CommentRemoteDataSource>(
+          () => CommentRemoteDataSourceImpl());
+  sl.registerLazySingleton<CommentRepository>(
+          () => CommentRepositoryImpl(remote: sl()));
+  sl.registerFactory(() => CommentBloc(repo: sl()));
+
+  // Profile
+  sl.registerLazySingleton<ProfileRemoteDataSource>(
+          () => ProfileRemoteDataSourceImpl());
+  sl.registerLazySingleton<ProfileRepository>(
+          () => ProfileRepositoryImpl(remote: sl()));
+
+  // Notification
+  sl.registerLazySingleton<NotificationRemoteDataSource>(
+          () => NotificationRemoteDataSourceImpl());
+  sl.registerLazySingleton<NotificationRepository>(
+          () => NotificationRepositoryImpl(remote: sl()));
+
+  // Chat
+  sl.registerLazySingleton<ChatRemoteDataSource>(
+      () => ChatRemoteDataSourceImpl()
+  );
+  sl.registerLazySingleton<ChatRepository>(
+      () => ChatRepositoryImpl(remote: sl())
+  );
+  sl.registerLazySingleton(()=>GetConversationsUseCase(sl()));
+  sl.registerLazySingleton(()=>GetOrCreateConversationUseCase(sl()));
+  sl.registerLazySingleton(()=>GetMessagesUseCase(sl()));
+  sl.registerLazySingleton(()=>SendMessageUseCase(sl()));
+  sl.registerLazySingleton(()=>DeleteMessageUseCase(sl()));
+  sl.registerLazySingleton(()=>MarkAsReadUseCase(sl()));
+  sl.registerLazySingleton(()=>WatchMessagesUseCase(sl()));
+  sl.registerLazySingleton(()=>SearchUsersUseCase(sl()));
+
+  sl.registerFactory(
+      () => ConversationBloc(
+          getConversations: sl(),
+          getOrCreateConversation: sl(),
+          searchUsers: sl()
+      )
+  );
+  sl.registerFactory(
+      () => MessageBloc(
+          getMessages: sl(),
+          sendMessage: sl(),
+          deleteMessage: sl(),
+          markAsRead: sl(),
+          watchMessages: sl(),
+      )
   );
 }

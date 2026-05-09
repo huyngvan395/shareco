@@ -16,7 +16,7 @@ void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
 
     await dotenv.load(fileName: '.env');
-    await SupabaseService.init();
+    await SupabaseService.initialize();
 
     final authNotifier = AuthNotifier();
     // Build our app and trigger a frame.

@@ -10,7 +10,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy(); // Clean URL strategy without '#' for premium web feeling
   await dotenv.load(fileName: '.env');
-  await SupabaseService.init();
+  await SupabaseService.initialize();
   await setupInjector();
   runApp(const AdminApp());
 }

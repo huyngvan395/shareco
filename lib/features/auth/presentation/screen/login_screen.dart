@@ -35,6 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -60,6 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
             content: Text(state.message),
             backgroundColor: AppColors.error,
           ));
+          setState(() => _errorMessage = state.message);
+        } else {
+          setState(() => _errorMessage = null);
         }
       },
       child: SingleChildScrollView(
@@ -127,6 +131,39 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: AppSizes.xxl),
+
+              if (_errorMessage != null) ...[
+                const SizedBox(height: AppSizes.sm),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSizes.lg,
+                    vertical: AppSizes.md,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withAlpha(25),
+                    borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+                    border: Border.all(color: AppColors.error.withAlpha(80)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          color: AppColors.error, size: 18),
+                      const SizedBox(width: AppSizes.sm),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: AppSizes.fontMd,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSizes.sm)
+              ],
 
               BlocBuilder<LoginBloc, LoginState>(
                 builder: (context, state) => AppButton(

@@ -8,8 +8,8 @@ import 'package:shareco/di/injector.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
-  await SupabaseService.init();
+  await SupabaseService.initialize();
   await setupInjector();
-  final authNotifier = AuthNotifier();
+  final authNotifier = sl<AuthNotifier>();
   runApp(App(authNotifier: authNotifier));
 }

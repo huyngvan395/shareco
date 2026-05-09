@@ -1,4 +1,5 @@
 import '../services/supabase/index.dart';
+import '../constants/env.dart';
 
 abstract class StorageBuckets {
   static const productMedia = 'product-media';
@@ -45,4 +46,40 @@ abstract class StorageImage {
 
     return normalized;
   }
+
+  /// Resolve Supabase Storage path → public URL
+  static String videoUrl(String path) {
+    if (path.startsWith('http')) return path;
+    return SupabaseService.publicUrl(Env.bucketVideoOriginals, path);
+  }
+
+  static String thumbnailUrl(String path) {
+    if (path.startsWith('http')) return path;
+    return SupabaseService.publicUrl(Env.bucketVideoThumbs, path);
+  }
+
+  static String avatarUrl(String path) {
+    if (path.startsWith('http')) return path;
+    return SupabaseService.publicUrl(Env.bucketAvatars, path);
+  }
+
+  static String productMediaUrl(String path) {
+    if (path.startsWith('http')) return path;
+    return SupabaseService.publicUrl(Env.bucketProductMedia, path);
+  }
+
+  /// Format large numbers: 1200 → "1.2K", 1_200_000 → "1.2M"
+  static String formatCount(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+    return n.toString();
+  }
+
+  /// Format currency in VND
+  static String formatVnd(double amount) {
+    if (amount >= 1000000) return '${(amount / 1000000).toStringAsFixed(1)}M₫';
+    if (amount >= 1000) return '${(amount / 1000).toStringAsFixed(0)}K₫';
+    return '${amount.toStringAsFixed(0)}₫';
+  }
 }
+

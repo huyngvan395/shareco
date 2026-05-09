@@ -787,7 +787,153 @@ create table if not exists public.notifications (
 
 create index if not exists idx_notifications_user_created on public.notifications(user_id, created_at desc);
 create index if not exists idx_notifications_user_read on public.notifications(user_id, is_read);
-31. Reports / moderation
+31. Chat
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  type text not null default 'direct',
+  created_by uuid references public.profiles(id) on delete set null,
+  direct_key text unique,
+  last_message text,
+  last_message_at timestamptz,
+  last_sender_id uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint conversations_type_check check (type in ('direct', 'group')),
+  constraint conversations_direct_key_check check (
+    (type = 'direct' and direct_key is not null)
+    or (type = 'group' and direct_key is null)
+  )
+);
+
+create index if not exists idx_conversations_updated_at on public.conversations(updated_at desc);
+create index if not exists idx_conversations_last_message_at on public.conversations(last_message_at desc);
+
+create trigger trg_conversations_updated_at
+before update on public.conversations
+for each row
+execute function public.set_updated_at();
+
+create table if not exists public.conversation_participants (
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  role text not null default 'member',
+  last_read_at timestamptz,
+  is_muted boolean not null default false,
+  joined_at timestamptz not null default now(),
+  primary key (conversation_id, user_id),
+  constraint conversation_participants_role_check check (role in ('owner', 'member'))
+);
+
+create index if not exists idx_conversation_participants_user on public.conversation_participants(user_id, conversation_id);
+create index if not exists idx_conversation_participants_conversation on public.conversation_participants(conversation_id);
+
+create or replace function public.is_conversation_participant(
+  p_conversation_id uuid,
+  p_user_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.conversation_participants cp
+    where cp.conversation_id = p_conversation_id
+      and cp.user_id = p_user_id
+  );
+$$;
+
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  type text not null default 'text',
+  content text,
+  media_url text,
+  reply_to_id uuid references public.messages(id) on delete set null,
+  is_deleted boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint messages_type_check check (type in ('text', 'image', 'video', 'sticker', 'gift')),
+  constraint messages_body_check check (
+    is_deleted
+    or content is not null
+    or media_url is not null
+  )
+);
+
+create index if not exists idx_messages_conversation_created on public.messages(conversation_id, created_at desc);
+create index if not exists idx_messages_sender_created on public.messages(sender_id, created_at desc);
+create index if not exists idx_messages_reply_to on public.messages(reply_to_id);
+
+create trigger trg_messages_updated_at
+before update on public.messages
+for each row
+execute function public.set_updated_at();
+
+create or replace function public.handle_message_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.conversations
+  set
+    last_message = case
+      when new.is_deleted then null
+      when new.type = 'text' then new.content
+      when new.type = 'image' then '[image]'
+      when new.type = 'video' then '[video]'
+      when new.type = 'sticker' then coalesce(new.content, '[sticker]')
+      when new.type = 'gift' then '[gift]'
+      else coalesce(new.content, '[message]')
+    end,
+    last_message_at = new.created_at,
+    last_sender_id = new.sender_id
+  where id = new.conversation_id;
+
+  return new;
+end;
+$$;
+
+create trigger trg_messages_after_insert
+after insert on public.messages
+for each row
+execute function public.handle_message_insert();
+
+create or replace function public.handle_message_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.is_deleted
+     and old.is_deleted = false
+     and exists (
+       select 1
+       from public.conversations c
+       where c.id = new.conversation_id
+         and c.last_message_at = old.created_at
+         and c.last_sender_id = old.sender_id
+     ) then
+    update public.conversations
+    set last_message = 'Message deleted'
+    where id = new.conversation_id;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger trg_messages_after_update
+after update of is_deleted on public.messages
+for each row
+execute function public.handle_message_update();
+32. Reports / moderation
 create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
   reporter_id uuid not null references public.profiles(id) on delete cascade,
@@ -799,7 +945,7 @@ create table if not exists public.reports (
   created_at timestamptz not null default now(),
   constraint reports_status_check check (status in ('open', 'reviewing', 'resolved', 'rejected'))
 );
-32. Enable RLS
+33. Enable RLS
 alter table public.profiles enable row level security;
 alter table public.user_follows enable row level security;
 alter table public.hashtags enable row level security;
@@ -822,8 +968,11 @@ alter table public.order_items enable row level security;
 alter table public.payments enable row level security;
 alter table public.product_reviews enable row level security;
 alter table public.notifications enable row level security;
+alter table public.conversations enable row level security;
+alter table public.conversation_participants enable row level security;
+alter table public.messages enable row level security;
 alter table public.reports enable row level security;
-33. Policy cơ bản
+34. Policy cơ bản
 create policy "profiles_public_read"
 on public.profiles
 for select
@@ -1218,6 +1367,44 @@ for update
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+create policy "conversations_read_participant"
+on public.conversations
+for select
+using (public.is_conversation_participant(id, auth.uid()));
+
+create policy "conversation_participants_read_related"
+on public.conversation_participants
+for select
+using (public.is_conversation_participant(conversation_id, auth.uid()));
+
+create policy "conversation_participants_update_self"
+on public.conversation_participants
+for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "messages_read_participant"
+on public.messages
+for select
+using (public.is_conversation_participant(conversation_id, auth.uid()));
+
+create policy "messages_insert_participant"
+on public.messages
+for insert
+with check (
+  auth.uid() = sender_id
+  and public.is_conversation_participant(conversation_id, auth.uid())
+);
+
+create policy "messages_update_sender"
+on public.messages
+for update
+using (auth.uid() = sender_id)
+with check (
+  auth.uid() = sender_id
+  and public.is_conversation_participant(conversation_id, auth.uid())
+);
+
 create policy "reports_insert_own"
 on public.reports
 for insert
@@ -1227,7 +1414,7 @@ create policy "reports_read_own"
 on public.reports
 for select
 using (auth.uid() = reporter_id);
-34. RPC hữu ích
+35. RPC hữu ích
 create or replace function public.get_following_feed(
   p_limit integer default 20,
   p_offset integer default 0
@@ -1279,7 +1466,87 @@ begin
   end if;
 end;
 $$;
-35. Gợi ý bucket Storage
+
+create or replace function public.get_or_create_conversation(other_user_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+  v_conversation_id uuid;
+  v_direct_key text;
+begin
+  v_user_id := auth.uid();
+
+  if v_user_id is null then
+    raise exception 'Unauthenticated';
+  end if;
+
+  if other_user_id is null then
+    raise exception 'other_user_id is required';
+  end if;
+
+  if other_user_id = v_user_id then
+    raise exception 'Cannot create a conversation with yourself';
+  end if;
+
+  if not exists (select 1 from public.profiles where id = other_user_id) then
+    raise exception 'User not found';
+  end if;
+
+  v_direct_key := least(v_user_id::text, other_user_id::text)
+    || ':'
+    || greatest(v_user_id::text, other_user_id::text);
+
+  insert into public.conversations (type, created_by, direct_key)
+  values ('direct', v_user_id, v_direct_key)
+  on conflict (direct_key) do update
+    set updated_at = public.conversations.updated_at
+  returning id into v_conversation_id;
+
+  insert into public.conversation_participants (
+    conversation_id,
+    user_id,
+    role,
+    last_read_at
+  )
+  values
+    (v_conversation_id, v_user_id, 'owner', now()),
+    (v_conversation_id, other_user_id, 'member', null)
+  on conflict (conversation_id, user_id) do nothing;
+
+  return v_conversation_id;
+end;
+$$;
+
+create or replace function public.mark_conversation_read(p_conversation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid;
+begin
+  v_user_id := auth.uid();
+
+  if v_user_id is null then
+    raise exception 'Unauthenticated';
+  end if;
+
+  update public.conversation_participants
+  set last_read_at = now()
+  where conversation_id = p_conversation_id
+    and user_id = v_user_id;
+
+  if not found then
+    raise exception 'Conversation not found';
+  end if;
+end;
+$$;
+36. Gợi ý bucket Storage
 - avatars
 - video-originals
 - video-thumbnails
@@ -1291,4 +1558,24 @@ Quy ước path:
 - avatars/{user_id}/avatar.jpg
 - video-originals/{user_id}/{video_id}.mp4
 - video-thumbnails/{user_id}/{video_id}.jpg
+<<<<<<< Updated upstream
 - product-media/{shop_id}/{product_id}/...
+=======
+- product-media/{shop_id}/{product_id}/...
+37. Những phần nên làm bằng Edge Function
+- tạo order từ cart
+- tạo payment intent
+- nhận webhook thanh toán
+- cập nhật orders.status
+- trừ tồn kho
+- hoàn tiền
+- moderation/admin actions
+38. Lưu ý thực chiến
+1. Orders không nên cho client insert trực tiếp nếu sau này có payment thật.
+2. Counter như like_count, comment_count, follower_count phải cập nhật bằng trigger hoặc server logic.
+3. Feed “For You” không nên query raw từ app; nên có recommendation layer riêng.
+4. Nên tách migration file theo domain để dễ rollback và review.
+39. Kết luận
+Bộ schema này phù hợp để khởi động một dự án Flutter đa nền tảng theo mô hình TikTok + TikTok Shop trên Supabase. Bạn có thể tách từng phần thành migration riêng hoặc dùng tài liệu này như bản master để rà soát kiến trúc trước khi triển khai.
+Bước tiếp theo: tách file migration chuẩn Supabase CLI, hoặc sinh Dart models và repositories cho Flutter từ schema này.
+>>>>>>> Stashed changes

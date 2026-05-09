@@ -61,4 +61,9 @@ abstract class AppColors {
   static const success = Color(0xFF4CAF50);
   static const error = Color(0xFFFF5252);
   static const warning = Color(0xFFFFB300);
+
+  static const Color chatBubbleMine = Color(0xFF007AFF); // Chat bubble for current user
+  static const Color chatBubbleOther = Color(0xFF3A3A3C); // Chat bubble for other users
+  static const Color textLight = Colors.white70; // Light text color
+  static const Color textDark = Colors.black87; // Dark text color
 }
