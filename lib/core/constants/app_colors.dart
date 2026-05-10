@@ -29,7 +29,7 @@ abstract class AppColors {
   // Backgrounds
   static const bgDark = Color(0xFF000000);
   static const bgCard = Color(0xFF1A1A1A);
-  static const bgInput = Color(0xFF2A2A2A);
+  static const bgInput = Color(0xFF797979);
   static const bgOverlay = Color(0x80000000);
 
   static const bgLight = Color(0xFFFFFFFF);

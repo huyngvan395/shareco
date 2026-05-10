@@ -3,13 +3,16 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shareco/core/services/supabase/presence_service.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_event.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_state.dart';
 import 'package:shareco/features/chat/presentation/screen/message_screen.dart';
+import 'package:shareco/routes/app_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/supabase/index.dart';
 import '../../../../di/injector.dart';
 import '../bloc/conversation_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 class ChatScreen extends StatelessWidget {
   const ChatScreen({super.key});
@@ -49,16 +52,13 @@ class _ChatViewState extends State<_ChatView> {
     return BlocListener<ConversationBloc, ConversationState>(
       listener: (ctx, state) {
         if (state is ConversationNavigateTo) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => MessageScreen(conversation: state.conversation),
-            ),
-          ).then(
+          context
+              .push(Routes.messages, extra: state.conversation)
+              .then(
                 (_) => ctx.read<ConversationBloc>().add(
-              const ConversationRefreshRequested(),
-            ),
-          );
+                  const ConversationRefreshRequested(),
+                ),
+              );
         }
       },
       child: Scaffold(
@@ -67,7 +67,7 @@ class _ChatViewState extends State<_ChatView> {
           backgroundColor: Colors.white,
           elevation: 0,
           title: const Text(
-            'Messages',
+            'Tin nhắn',
             style: TextStyle(
               color: Colors.black87,
               fontWeight: FontWeight.w700,
@@ -142,25 +142,25 @@ class _ChatViewState extends State<_ChatView> {
               );
             },
             decoration: InputDecoration(
-              hintText: 'Search users or messages',
+              hintText: 'Tìm người dùng hoặc tin nhắn',
               hintStyle: const TextStyle(color: Colors.black38),
               prefixIcon: const Icon(Icons.search, color: Colors.black38),
               suffixIcon: _searchCtrl.text.isNotEmpty
                   ? GestureDetector(
-                onTap: () {
-                  _searchCtrl.clear();
-                  ctx.read<ConversationBloc>().add(
-                    const ConversationSearchCleared(),
-                  );
-                  FocusScope.of(context).unfocus();
-                  setState(() => _searchFocused = false);
-                },
-                child: const Icon(
-                  Icons.close,
-                  color: Colors.black38,
-                  size: 18,
-                ),
-              )
+                      onTap: () {
+                        _searchCtrl.clear();
+                        ctx.read<ConversationBloc>().add(
+                          const ConversationSearchCleared(),
+                        );
+                        FocusScope.of(context).unfocus();
+                        setState(() => _searchFocused = false);
+                      },
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.black38,
+                        size: 18,
+                      ),
+                    )
                   : null,
               filled: true,
               fillColor: const Color(0xFFF0F0F0),
@@ -184,7 +184,7 @@ class _ChatViewState extends State<_ChatView> {
               setState(() => _searchFocused = false);
             },
             child: const Text(
-              'Cancel',
+              'Thoát',
               style: TextStyle(color: AppColors.primary, fontSize: 14),
             ),
           ),
@@ -205,7 +205,7 @@ class _ChatViewState extends State<_ChatView> {
               child: Row(
                 children: [
                   const Text(
-                    'Activity',
+                    'Hoạt động',
                     style: TextStyle(
                       color: Colors.black38,
                       fontSize: 12,
@@ -216,7 +216,7 @@ class _ChatViewState extends State<_ChatView> {
                   TextButton(
                     onPressed: () {},
                     child: const Text(
-                      'See all',
+                      'Xem tất cả',
                       style: TextStyle(color: AppColors.primary, fontSize: 12),
                     ),
                   ),
@@ -231,31 +231,31 @@ class _ChatViewState extends State<_ChatView> {
                 children: [
                   _ActivityBubble(
                     icon: Icons.favorite,
-                    label: 'Likes',
+                    label: 'Thích',
                     color: AppColors.like,
                     count: 42,
                   ),
                   _ActivityBubble(
                     icon: Icons.chat_bubble,
-                    label: 'Comments',
+                    label: 'Bình luận',
                     color: AppColors.secondary,
                     count: 8,
                   ),
                   _ActivityBubble(
                     icon: Icons.alternate_email,
-                    label: 'Mentions',
+                    label: 'Nhắc đến',
                     color: Colors.amber,
                     count: 3,
                   ),
                   _ActivityBubble(
                     icon: Icons.person_add,
-                    label: 'Follows',
+                    label: 'Theo dõi',
                     color: AppColors.primary,
                     count: 12,
                   ),
                   _ActivityBubble(
                     icon: Icons.share,
-                    label: 'Shares',
+                    label: 'Chia sẻ',
                     color: Colors.green,
                     count: 5,
                   ),
@@ -283,12 +283,12 @@ class _ChatViewState extends State<_ChatView> {
             ),
             SizedBox(height: 16),
             Text(
-              'No conversations yet',
+              'Chưa có cuộc hội thoại nào',
               style: TextStyle(color: Colors.black38, fontSize: 16),
             ),
             SizedBox(height: 8),
             Text(
-              "Tap ✏️ to start a new chat",
+              "Nhấn ✏️ để bắt đầu cuộc trò chuyện mới",
               style: TextStyle(color: Colors.black26, fontSize: 13),
             ),
           ],
@@ -313,17 +313,14 @@ class _ChatViewState extends State<_ChatView> {
                 ? other!.displayName
                 : (other?.username ?? 'Unknown'),
             username: other?.username ?? '',
-            lastMessage: conv.lastMessage ?? 'Start a conversation',
+            lastMessage: conv.lastMessage ?? 'Bắt đầu cuộc hội thoại',
             time: _timeAgo(conv.lastMessageAt ?? conv.updatedAt),
+            userId: other!.id,
             hasUnread: conv.hasUnread,
-            onTap: () =>
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MessageScreen(conversation: conv),
-                  ),
-                ).then(
-                      (_) => ctx.read<ConversationBloc>().add(
+            onTap: () => context
+                .push(Routes.messages, extra: conv)
+                .then(
+                  (_) => ctx.read<ConversationBloc>().add(
                     const ConversationRefreshRequested(),
                   ),
                 ),
@@ -337,7 +334,7 @@ class _ChatViewState extends State<_ChatView> {
     if (state.searchQuery.isEmpty) {
       return const Center(
         child: Text(
-          'Search for users to message',
+          'Tìm kiếm người dùng để nhắn tin',
           style: TextStyle(color: Colors.black38),
         ),
       );
@@ -350,7 +347,7 @@ class _ChatViewState extends State<_ChatView> {
             const Icon(Icons.search_off, color: Colors.black12, size: 48),
             const SizedBox(height: 12),
             Text(
-              'No users found for "${state.searchQuery}"',
+              'Không tìm thấy người dùng nào cho "${state.searchQuery}"',
               style: const TextStyle(color: Colors.black38),
             ),
           ],
@@ -385,7 +382,9 @@ class _ChatViewState extends State<_ChatView> {
                 _searchCtrl.clear();
                 FocusScope.of(context).unfocus();
                 setState(() => _searchFocused = false);
-                ctx.read<ConversationBloc>().add(ConversationOpenRequested(u.id));
+                ctx.read<ConversationBloc>().add(
+                  ConversationOpenRequested(u.id),
+                );
               },
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.primary),
@@ -394,7 +393,7 @@ class _ChatViewState extends State<_ChatView> {
                 ),
               ),
               child: const Text(
-                'Message',
+                'Tin nhắn',
                 style: TextStyle(color: AppColors.primary, fontSize: 12),
               ),
             ),
@@ -421,7 +420,7 @@ class _ChatViewState extends State<_ChatView> {
             const ConversationListLoadRequested(),
           ),
           child: const Text(
-            'Retry',
+            'Thử lại',
             style: TextStyle(color: AppColors.primary),
           ),
         ),
@@ -456,6 +455,7 @@ class _ChatViewState extends State<_ChatView> {
 class _ConvTile extends StatelessWidget {
   final String? avatarUrl;
   final String name, username, lastMessage, time;
+  final String userId;
   final bool hasUnread;
   final VoidCallback onTap;
 
@@ -465,6 +465,7 @@ class _ConvTile extends StatelessWidget {
     required this.username,
     required this.lastMessage,
     required this.time,
+    required this.userId,
     required this.hasUnread,
     required this.onTap,
   });
@@ -474,23 +475,29 @@ class _ConvTile extends StatelessWidget {
     color: Colors.white,
     child: ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Stack(
-        children: [
-          _Avatar(url: avatarUrl, name: name, size: 50),
-          Positioned(
-            right: 2,
-            bottom: 2,
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: Colors.green,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+      leading: StreamBuilder<Map<String, dynamic>>(
+        stream: sl<PresenceService>().watchUserPresence(userId),
+        builder: (_, snapshot) {
+          final isOnline = snapshot.data?['is_online'] == true;
+          return Stack(
+            children: [
+              _Avatar(url: avatarUrl, name: name, size: 50),
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: isOnline ? Colors.green : Colors.grey.shade400,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
       title: Text(
         name,
@@ -512,7 +519,10 @@ class _ConvTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(time, style: const TextStyle(color: Colors.black38, fontSize: 11)),
+          Text(
+            time,
+            style: const TextStyle(color: Colors.black38, fontSize: 11),
+          ),
           if (hasUnread) ...[
             const SizedBox(height: 4),
             Container(
@@ -566,7 +576,7 @@ class _NewChatSheetState extends State<_NewChatSheet> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'New Message',
+          'Tin nhắn mới',
           style: TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w700,
@@ -584,7 +594,7 @@ class _NewChatSheetState extends State<_NewChatSheet> {
               ConversationSearchRequested(q),
             ),
             decoration: InputDecoration(
-              hintText: 'Search by name or @username',
+              hintText: 'Tìm bởi tên hoặc @username',
               hintStyle: const TextStyle(color: Colors.black38),
               prefixIcon: const Icon(Icons.search, color: Colors.black38),
               filled: true,
@@ -722,13 +732,13 @@ class _Avatar extends StatelessWidget {
     backgroundImage: url != null ? CachedNetworkImageProvider(url!) : null,
     child: url == null
         ? Text(
-      name.isNotEmpty ? name[0].toUpperCase() : '?',
-      style: TextStyle(
-        color: Colors.black54,
-        fontWeight: FontWeight.w700,
-        fontSize: size * 0.35,
-      ),
-    )
+            name.isNotEmpty ? name[0].toUpperCase() : '?',
+            style: TextStyle(
+              color: Colors.black54,
+              fontWeight: FontWeight.w700,
+              fontSize: size * 0.35,
+            ),
+          )
         : null,
   );
 }

@@ -5,7 +5,7 @@ import '../../../../shared/domain/entities/base_entity.dart';
 
 // ─── Message type ─────────────────────────────────────────────────────────────
 
-enum MessageType { text, image, video, sticker, gift }
+enum MessageType { text, image, video, sticker, gift, audio }
 
 // ─── Message ──────────────────────────────────────────────────────────────────
 
@@ -48,10 +48,11 @@ class MessageEntity extends Equatable {
     if (isDeleted) return 'Message deleted';
     return switch (type) {
       MessageType.text    => content ?? '',
-      MessageType.image   => '📷 Image',
-      MessageType.video   => '🎥 Video',
+      MessageType.image   => 'Image',
+      MessageType.video   => 'Video',
       MessageType.sticker => content ?? '😊',
-      MessageType.gift    => '🎁 Gift',
+      MessageType.gift    => 'Gift',
+      MessageType.audio => 'Voice message',
     };
   }
 

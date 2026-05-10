@@ -99,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: AppSizes.xxxl),
 
               AppTextField(
-                hint: 'Enter your email',
+                hint: 'Nhập email của bạn',
                 label: AppStrings.email,
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
@@ -110,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: AppSizes.lg),
 
               AppTextField(
-                hint: 'Enter your password',
+                hint: 'Nhập mật khẩu',
                 label: AppStrings.password,
                 controller: _passwordCtrl,
                 isPassword: true,

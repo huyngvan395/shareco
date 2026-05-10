@@ -1,13 +1,12 @@
 // features/chat/data/datasources/chat_remote_datasource.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../../core/constants/env.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:shareco/core/services/supabase/presence_service.dart';
 import '../../../../core/errors/exception.dart';
 import '../../../../core/services/supabase/index.dart';
 import '../../../../shared/data/models/profile_stub_model.dart';
 import '../../../../shared/domain/entities/base_entity.dart';
 import '../models/chat_models.dart';
-import '../../domain/entities/chat_entities.dart';
 
 abstract class ChatRemoteDataSource {
   Future<List<ConversationModel>> getConversations();
@@ -22,6 +21,7 @@ abstract class ChatRemoteDataSource {
   Stream<MessageModel> watchMessages(String conversationId);
   Stream<ConversationModel> watchConversation(String conversationId);
   Future<List<ProfileStubModel>> searchUsers(String query);
+  Stream<Map<String, dynamic>> watchUserPresence(String userId);
 }
 
 class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
@@ -30,6 +30,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   static const _msgTable   = 'messages';
   static const _profTable  = 'profiles';
   static const _msgLimit   = 30;
+  final PresenceService _presenceService;
 
   // Join: conversations + participants + their profiles + last_read_at
   static const _convSelect = '''
@@ -53,6 +54,9 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   ''';
 
   String get _uid => SupabaseService.currentUserId ?? '';
+
+  ChatRemoteDataSourceImpl({required PresenceService presenceService})
+      : _presenceService = presenceService;
 
   // ── Conversations ──────────────────────────────────────────────────────────
 
@@ -80,6 +84,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           r as Map<String, dynamic>, currentUserId: _uid))
           .toList();
     } catch (e) {
+      debugPrint('ERROR: $e');
       throw ServerException(e.toString());
     }
   }
@@ -103,6 +108,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       return ConversationModel.fromJson(
           row as Map<String, dynamic>, currentUserId: _uid);
     } catch (e) {
+      debugPrint('ERROR: $e');
       throw ServerException(e.toString());
     }
   }
@@ -120,7 +126,6 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       final rows = await SupabaseService.from(_msgTable)
           .select(_msgSelect)
           .eq('conversation_id', conversationId)
-          .eq('is_deleted', false)
           .order('created_at', ascending: false) // newest first
           .range(from, to) as List;
 
@@ -140,6 +145,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         hasMore: rows.length == _msgLimit,
       );
     } catch (e) {
+      debugPrint('ERROR: $e');
       throw ServerException(e.toString());
     }
   }
@@ -155,6 +161,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       return MessageModel.fromJson(
           row as Map<String, dynamic>, isMine: true);
     } catch (e) {
+      debugPrint('ERROR: $e');
       throw ServerException(e.toString());
     }
   }
@@ -167,6 +174,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           .eq('id', messageId)
           .eq('sender_id', _uid);
     } catch (e) {
+      debugPrint('ERROR: $e');
       throw ServerException(e.toString());
     }
   }
@@ -187,28 +195,42 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
 
   @override
   Stream<MessageModel> watchMessages(String conversationId) {
+    // Track IDs đã thấy để tránh emit lại
+    final seenIds = <String>{};
+
     return SupabaseService.client
         .from(_msgTable)
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('created_at')
-        .map((rows) => rows.last) // only emit new rows
-        .asyncMap((row) async {
-      // Fetch full message with sender profile
-      try {
-        final full = await SupabaseService.from(_msgTable)
-            .select(_msgSelect)
-            .eq('id', row['id'] as String)
-            .single();
-        return MessageModel.fromJson(
+        .asyncExpand((rows) async* {   // dùng asyncExpand thay vì .map().asyncMap()
+      if (rows.isEmpty) return;
+
+      // Lấy row mới nhất chưa từng thấy
+      final newRows = rows.where((r) {
+        final id = r['id'] as String?;
+        return id != null && !seenIds.contains(id);
+      }).toList();
+
+      for (final row in newRows) {
+        final id = row['id'] as String;
+        seenIds.add(id);
+
+        try {
+          final full = await SupabaseService.from(_msgTable)
+              .select(_msgSelect)
+              .eq('id', id)
+              .single();
+          yield MessageModel.fromJson(
             full as Map<String, dynamic>,
-            isMine: (full['sender_id'] as String) == _uid);
-      } catch (_) {
-        // Fallback: build minimal model from stream row
-        return MessageModel.fromJson(
-          {...row, 'profiles': <String, dynamic>{}},
-          isMine: (row['sender_id'] as String?) == _uid,
-        );
+            isMine: (full['sender_id'] as String) == _uid,
+          );
+        } catch (_) {
+          yield MessageModel.fromJson(
+            {...row, 'profiles': <String, dynamic>{}},
+            isMine: (row['sender_id'] as String?) == _uid,
+          );
+        }
       }
     });
   }
@@ -247,7 +269,12 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           .map((r) => ProfileStubModel.fromJson(r as Map<String, dynamic>))
           .toList();
     } catch (e) {
+      debugPrint('ERROR: $e');
       throw ServerException(e.toString());
     }
   }
+
+  @override
+  Stream<Map<String, dynamic>> watchUserPresence(String userId) =>
+      _presenceService.watchUserPresence(userId);
 }

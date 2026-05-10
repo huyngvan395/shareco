@@ -27,10 +27,10 @@ class FeedTopBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg),
           child: Row(children: [
-            _Tab(label: 'Following', isActive: activeTab == FeedTab.following,
+            _Tab(label: 'Đang theo dõi', isActive: activeTab == FeedTab.following,
                 onTap: () => onTabChanged(FeedTab.following)),
             const SizedBox(width: AppSizes.xl),
-            _Tab(label: 'For You', isActive: activeTab == FeedTab.forYou,
+            _Tab(label: 'Dành cho bạn', isActive: activeTab == FeedTab.forYou,
                 onTap: () => onTabChanged(FeedTab.forYou)),
             const Spacer(),
             IconButton(icon: const Icon(Icons.search_rounded, color: Colors.white, size: AppSizes.iconLg), onPressed: () {}),

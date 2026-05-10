@@ -42,8 +42,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on AuthException {
       rethrow;
     } on AuthApiException catch (e) {
+      print('AuthApiException: $e');
       throw AuthException(e.message);
     } catch (e) {
+      print('ServerException: $e');
       throw ServerException(e.toString());
     }
   }

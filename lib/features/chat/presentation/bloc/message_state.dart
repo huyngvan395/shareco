@@ -17,6 +17,8 @@ class MessageLoaded extends MessageState {
   final int currentPage;
   final bool isSending;
   final MessageEntity? replyingTo;
+  final Map<String, dynamic> presenceData;
+  final bool hasPresenceLoaded;
 
   const MessageLoaded({
     required this.conversationId,
@@ -26,6 +28,8 @@ class MessageLoaded extends MessageState {
     this.currentPage = 0,
     this.isSending = false,
     this.replyingTo,
+    this.presenceData = const {},
+    this.hasPresenceLoaded = false,
   });
 
   MessageLoaded copyWith({
@@ -36,6 +40,8 @@ class MessageLoaded extends MessageState {
     bool? isSending,
     MessageEntity? replyingTo,
     bool clearReply = false,
+    Map<String, dynamic>? presenceData,
+    bool? hasPresenceLoaded,
   }) =>
       MessageLoaded(
         conversationId: conversationId,
@@ -45,11 +51,13 @@ class MessageLoaded extends MessageState {
         currentPage: currentPage ?? this.currentPage,
         isSending: isSending ?? this.isSending,
         replyingTo: clearReply ? null : (replyingTo ?? this.replyingTo),
+        presenceData: presenceData ?? this.presenceData,
+        hasPresenceLoaded: hasPresenceLoaded ?? this.hasPresenceLoaded,
       );
 
   @override
   List<Object?> get props =>
-      [conversationId, messages, isLoadingMore, hasReachedMax, isSending, replyingTo?.id];
+      [conversationId, messages, isLoadingMore, hasReachedMax, isSending, replyingTo?.id, presenceData,];
 }
 
 class MessageError extends MessageState {

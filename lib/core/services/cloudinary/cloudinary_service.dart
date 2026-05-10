@@ -7,13 +7,14 @@ import 'package:http/http.dart' as http;
 import '../../constants/env.dart';
 
 class CloudinaryService {
-  static final _base = 'https://api.cloudinary.com/v1_1/${Env.cloudinaryCloudName}';
+  static final _base =
+      'https://api.cloudinary.com/v1_1/${Env.cloudinaryCloudName}';
 
   /// Upload video, trả về secure_url
   Future<String> uploadVideo(
-      String filePath, {
-        void Function(double progress)? onProgress,
-      }) async {
+    String filePath, {
+    void Function(double progress)? onProgress,
+  }) async {
     final file = File(filePath);
     final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -27,10 +28,10 @@ class CloudinaryService {
 
     final uri = Uri.parse('$_base/video/upload');
     final request = http.MultipartRequest('POST', uri)
-      ..fields['api_key']   = Env.cloudinaryApiKey
+      ..fields['api_key'] = Env.cloudinaryApiKey
       ..fields['timestamp'] = '$timestamp'
       ..fields['signature'] = signature
-      ..fields['folder']    = 'shareco/videos'
+      ..fields['folder'] = 'shareco/videos'
       ..fields['resource_type'] = 'video'
       ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
@@ -54,7 +55,9 @@ class CloudinaryService {
     }
 
     if (streamedResponse.statusCode != 200) {
-      throw Exception('Cloudinary upload failed: ${streamedResponse.statusCode}');
+      throw Exception(
+        'Cloudinary upload failed: ${streamedResponse.statusCode}',
+      );
     }
 
     final json = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
@@ -73,10 +76,10 @@ class CloudinaryService {
 
     final uri = Uri.parse('$_base/image/upload');
     final request = http.MultipartRequest('POST', uri)
-      ..fields['api_key']   = Env.cloudinaryApiKey
+      ..fields['api_key'] = Env.cloudinaryApiKey
       ..fields['timestamp'] = '$timestamp'
       ..fields['signature'] = signature
-      ..fields['folder']    = 'shareco/thumbnails'
+      ..fields['folder'] = 'shareco/thumbnails'
       ..files.add(await http.MultipartFile.fromPath('file', filePath));
 
     final res = await request.send();
@@ -89,8 +92,98 @@ class CloudinaryService {
   }
 
   String _sign(Map<String, String> params) {
-    final sorted = params.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
-    final str = sorted.map((e) => '${e.key}=${e.value}').join('&') + Env.cloudinaryApiSecret;
+    final sorted = params.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final str =
+        sorted.map((e) => '${e.key}=${e.value}').join('&') +
+        Env.cloudinaryApiSecret;
     return sha1.convert(utf8.encode(str)).toString();
+  }
+
+  /// Upload ảnh chat, trả về secure_url
+  Future<String> uploadChatImage(
+    String filePath, {
+    void Function(double progress)? onProgress,
+  }) async {
+    final file = File(filePath);
+    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    final paramsToSign = {
+      'timestamp': '$timestamp',
+      'folder': 'shareco/chat/images',
+    };
+    final signature = _sign(paramsToSign);
+
+    final uri = Uri.parse('$_base/image/upload');
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['api_key'] = Env.cloudinaryApiKey
+      ..fields['timestamp'] = '$timestamp'
+      ..fields['signature'] = signature
+      ..fields['folder'] = 'shareco/chat/images'
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+    final streamedResponse = await request.send();
+    final totalBytes = file.lengthSync();
+    int received = 0;
+    final List<int> bytes = [];
+
+    await for (final chunk in streamedResponse.stream) {
+      bytes.addAll(chunk);
+      received += chunk.length;
+      onProgress?.call(received / totalBytes);
+    }
+
+    if (streamedResponse.statusCode != 200) {
+      throw Exception(
+        'Cloudinary image upload failed: ${streamedResponse.statusCode}',
+      );
+    }
+
+    final json = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+    return json['secure_url'] as String;
+  }
+
+  /// Upload audio (voice message), trả về secure_url
+  Future<String> uploadAudio(
+      String filePath, {
+        void Function(double progress)? onProgress,
+      }) async {
+    final file = File(filePath);
+
+    if (!await file.exists()) {
+      throw Exception('File audio không tồn tại');
+    }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    // ❌ KHÔNG thêm resource_type vào đây
+    final paramsToSign = {
+      'timestamp': '$timestamp',
+      'folder': 'shareco/chat/audio',
+    };
+
+    final signature = _sign(paramsToSign);
+
+    final uri = Uri.parse('$_base/video/upload');
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['api_key'] = Env.cloudinaryApiKey
+      ..fields['timestamp'] = '$timestamp'
+      ..fields['signature'] = signature
+      ..fields['folder'] = 'shareco/chat/audio'
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+    final streamedResponse = await request.send();
+
+    final responseBody = await streamedResponse.stream.bytesToString();
+
+    if (streamedResponse.statusCode != 200) {
+      print('❌ Cloudinary error: ${streamedResponse.statusCode} - $responseBody');
+      throw Exception('Upload failed');
+    }
+
+    final json = jsonDecode(responseBody) as Map<String, dynamic>;
+
+    return json['secure_url'] as String;
   }
 }

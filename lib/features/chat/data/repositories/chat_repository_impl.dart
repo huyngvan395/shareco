@@ -1,6 +1,9 @@
 // features/chat/data/repositories/chat_repository_impl.dart
 
+import 'dart:io';
+
 import 'package:dartz/dartz.dart';
+import 'package:shareco/core/services/cloudinary/cloudinary_service.dart';
 import '../../../../core/errors/exception.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/services/supabase/index.dart';
@@ -13,7 +16,8 @@ import '../models/chat_models.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
   final ChatRemoteDataSource remote;
-  const ChatRepositoryImpl({required this.remote});
+  final CloudinaryService cloudinaryService;
+  const ChatRepositoryImpl({required this.remote, required this.cloudinaryService});
 
   Either<Failure, T> _handle<T>(dynamic e) {
     if (e is AuthException) return Left(AuthFailure(e.message));
@@ -56,9 +60,10 @@ class ChatRepositoryImpl implements ChatRepository {
   @override
   Future<Either<Failure, MessageEntity>> sendMessage({
     required String conversationId,
-    required String content,
+    String? content,
     MessageType type = MessageType.text,
     String? replyToId,
+    String? mediaUrl
   }) async {
     try {
       final model = await remote.sendMessage({
@@ -66,6 +71,7 @@ class ChatRepositoryImpl implements ChatRepository {
         'content': content,
         'type': type.name,
         if (replyToId != null) 'reply_to_id': replyToId,
+        if (mediaUrl != null) 'media_url': mediaUrl,
       });
       return Right(model);
     } catch (e) {
@@ -125,6 +131,39 @@ class ChatRepositoryImpl implements ChatRepository {
       return Right(await remote.searchUsers(query));
     } catch (e) {
       return _handle(e);
+    }
+  }
+
+  @override
+  Stream<Map<String, dynamic>> watchUserPresence(String userId) =>
+      remote.watchUserPresence(userId);
+
+  @override
+  Future<Either<Failure, String>> uploadMedia(
+      File file, {
+        String folder = 'images',
+        void Function(double progress)? onProgress,
+      }) async {
+    try {
+      final String url;
+
+      if (folder == 'audio') {
+        // Audio → upload như video resource_type
+        url = await cloudinaryService.uploadAudio(
+          file.path,
+          onProgress: onProgress,
+        );
+      } else {
+        // Image → dùng uploadThumbnail (image resource_type)
+        url = await cloudinaryService.uploadChatImage(
+          file.path,
+          onProgress: onProgress,
+        );
+      }
+
+      return Right(url);
+    } catch (e) {
+      return Left(ServerFailure(e.toString()));
     }
   }
 }

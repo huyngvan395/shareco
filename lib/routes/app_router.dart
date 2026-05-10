@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shareco/core/layout/main_scaffold.dart';
+import 'package:shareco/core/navigation/app_route_observer.dart';
 import 'package:shareco/core/notifier/auth_notifier.dart';
 import 'package:shareco/di/injector.dart';
 import 'package:shareco/features/auth/presentation/screen/auth_callback_screen.dart';
+import 'package:shareco/features/chat/domain/entities/chat_entities.dart';
 import 'package:shareco/features/chat/presentation/screen/chat_screen.dart';
+import 'package:shareco/features/chat/presentation/screen/message_screen.dart';
 import 'package:shareco/features/ecommerce/address/domain/entities/shipping_address.dart';
 import 'package:shareco/features/ecommerce/address/presentation/screen/address_form_screen.dart';
 import 'package:shareco/features/ecommerce/address/presentation/screen/address_list_screen.dart';
@@ -37,6 +40,7 @@ class Routes {
   static const chat = "/chat";
   static const create = "/create";
   static const discover = "/discover";
+  static const messages = "/messages";
   static const ecommerce = "/ecommerce";
   static const productDetail = "/products/:id";
   static const cart = "/cart";
@@ -53,6 +57,7 @@ class Routes {
 
 class AppRouter {
   static GoRouter router(AuthNotifier authNotifier) => GoRouter(
+    observers: [routeObserver],
     refreshListenable: authNotifier,
     initialLocation: Routes.feed,
     routes: [
@@ -129,6 +134,15 @@ class AppRouter {
         builder: (_, state) {
           final uid = state.pathParameters['id'] ?? '';
           return ProfileScreen(userId: uid);
+        },
+      ),
+      GoRoute(
+        path: Routes.messages,
+        builder: (_, state) {
+          final conversation = state.extra;
+          return MessageScreen(
+            conversation: conversation as ConversationEntity,
+          );
         },
       ),
       StatefulShellRoute.indexedStack(

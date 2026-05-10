@@ -24,9 +24,9 @@ class MessageModel extends MessageEntity {
   });
 
   factory MessageModel.fromJson(
-      Map<String, dynamic> json, {
-        bool isMine = false,
-      }) {
+    Map<String, dynamic> json, {
+    bool isMine = false,
+  }) {
     final senderJson = json['profiles'] as Map<String, dynamic>? ?? {};
     return MessageModel(
       id: json['id'] as String,
@@ -55,19 +55,18 @@ class MessageModel extends MessageEntity {
     required String content,
     MessageType type = MessageType.text,
     String? replyToId,
-  }) =>
-      MessageModel(
-        id: tempId,
-        conversationId: conversationId,
-        senderId: senderId,
-        sender: sender,
-        type: type,
-        content: content,
-        replyToId: replyToId,
-        createdAt: DateTime.now(),
-        isMine: true,
-        isPending: true,
-      );
+  }) => MessageModel(
+    id: tempId,
+    conversationId: conversationId,
+    senderId: senderId,
+    sender: sender,
+    type: type,
+    content: content,
+    replyToId: replyToId,
+    createdAt: DateTime.now(),
+    isMine: true,
+    isPending: true,
+  );
 
   Map<String, dynamic> toInsertJson() => {
     'conversation_id': conversationId,
@@ -79,11 +78,12 @@ class MessageModel extends MessageEntity {
   };
 
   static MessageType _parseType(String raw) => switch (raw) {
-    'image'   => MessageType.image,
-    'video'   => MessageType.video,
+    'image' => MessageType.image,
+    'video' => MessageType.video,
     'sticker' => MessageType.sticker,
-    'gift'    => MessageType.gift,
-    _         => MessageType.text,
+    'gift' => MessageType.gift,
+    'audio' => MessageType.audio,
+    _ => MessageType.text,
   };
 }
 
@@ -103,14 +103,14 @@ class ConversationModel extends ConversationEntity {
   });
 
   factory ConversationModel.fromJson(
-      Map<String, dynamic> json, {
-        String? currentUserId,
-      }) {
+    Map<String, dynamic> json, {
+    String? currentUserId,
+  }) {
     // Participants come from a join: conversation_participants -> profiles
     final participantsJson =
         (json['conversation_participants'] as List?)
             ?.cast<Map<String, dynamic>>() ??
-            [];
+        [];
 
     final participants = participantsJson.map((cp) {
       final profile = cp['profiles'] as Map<String, dynamic>? ?? {};
@@ -122,7 +122,7 @@ class ConversationModel extends ConversationEntity {
     DateTime? lastReadAt;
     if (currentUserId != null) {
       final myEntry = participantsJson.firstWhere(
-            (cp) => cp['user_id'] == currentUserId,
+        (cp) => cp['user_id'] == currentUserId,
         orElse: () => <String, dynamic>{},
       );
       final raw = myEntry['last_read_at'];

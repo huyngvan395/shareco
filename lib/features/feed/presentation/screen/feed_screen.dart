@@ -2,8 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shareco/core/navigation/app_route_observer.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_event.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_state.dart';
+import 'package:shareco/routes/app_router.dart';
 import 'package:video_player/video_player.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/storage_image.dart';
@@ -71,15 +74,21 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   final _cache = _VideoCache();
   final _pageCtrl = PageController();
   int _activePage = 0;
   bool _hasScrolledToTarget = false;
+  late final GoRouter _router;
+  bool _routerListenerAdded = false;
+  bool _routeAwareSubscribed = false;
+  bool _isFeedVisible = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    routeObserver.addRouteListener(_onNavigationEvent);
     if (widget.initialVideoId != null) {
       context.read<FeedBloc>().add(
         FeedLoadToVideoRequested(widget.initialVideoId!),
@@ -89,11 +98,88 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
+  void _onNavigationEvent() {
+    if (!mounted) return;
+    final isFeed = _isCurrentFeedRoute();
+    _setFeedVisible(isFeed, resumeActiveVideo: isFeed);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (_routerListenerAdded) {
+      _router.routerDelegate.removeListener(_onRouteChanged);
+    }
     _pageCtrl.dispose();
     _cache.disposeAll();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _setFeedVisible(false);
+    } else if (state == AppLifecycleState.resumed &&
+        _routerListenerAdded &&
+        _isCurrentFeedRoute()) {
+      _setFeedVisible(true, resumeActiveVideo: true);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (!_routerListenerAdded) {
+      _router = GoRouter.of(context);
+      _router.routerDelegate.addListener(_onRouteChanged);
+      _routerListenerAdded = true;
+    }
+  }
+
+  void _onRouteChanged() {
+    final isFeedRoute = _isCurrentFeedRoute();
+    _setFeedVisible(isFeedRoute, resumeActiveVideo: isFeedRoute);
+  }
+
+
+  bool _isCurrentFeedRoute() {
+    final config = _router.routerDelegate.currentConfiguration;
+
+    if (config.matches.length > 1) return false;
+
+    final uri = config.uri;
+    return uri.path == Routes.feed;
+  }
+
+  void _setFeedVisible(bool visible, {bool resumeActiveVideo = false}) {
+    if (!mounted) return;
+
+    if (_isFeedVisible != visible) {
+      setState(() => _isFeedVisible = visible);
+    }
+
+    if (!visible) {
+      _cache.pauseAll();
+      return;
+    }
+
+    if (resumeActiveVideo) {
+      _resumeActiveVideo();
+    }
+  }
+
+  Future<void> _resumeActiveVideo() async {
+    final state = context.read<FeedBloc>().state;
+    if (state is! FeedLoaded || _activePage >= state.videos.length) return;
+
+    final ctrl = await _cache.getOrCreate(
+      state.videos[_activePage].videoPath,
+    );
+    if (ctrl.value.isInitialized) {
+      await ctrl.play();
+    }
   }
 
   void _onPageChanged(int page) {
@@ -225,7 +311,7 @@ class _FeedScreenState extends State<FeedScreen> {
           return VideoItem(
             key: ValueKey(video.id),
             video: video,
-            isActive: i == _activePage,
+            isActive: _isFeedVisible && i == _activePage,
             controllerFuture: _cache.getOrCreate(video.videoPath),
           );
         },

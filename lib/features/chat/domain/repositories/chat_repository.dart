@@ -1,5 +1,7 @@
 // features/chat/domain/repositories/chat_repository.dart
 
+import 'dart:io';
+
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../shared/domain/entities/base_entity.dart';
@@ -22,9 +24,10 @@ abstract class ChatRepository {
   /// Send a text message
   Future<Either<Failure, MessageEntity>> sendMessage({
     required String conversationId,
-    required String content,
+    String? content,
     MessageType type,
     String? replyToId,
+    String? mediaUrl
   });
 
   /// Send an image message (after upload)
@@ -48,4 +51,12 @@ abstract class ChatRepository {
 
   /// Search users to start a new chat
   Future<Either<Failure, List<ProfileStub>>> searchUsers(String query);
+
+  Stream<Map<String, dynamic>> watchUserPresence(String userId);
+
+  Future<Either<Failure, String>> uploadMedia(
+      File file, {
+        String folder,
+        void Function(double progress)? onProgress,
+      });
 }

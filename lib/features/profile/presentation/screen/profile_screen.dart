@@ -3,6 +3,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shareco/features/chat/domain/usecases/chat_usecases.dart';
+import 'package:shareco/features/chat/presentation/bloc/conversation_bloc.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_event.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_state.dart';
 import 'package:shareco/features/profile/presentation/screen/profile_feed_screen.dart';
@@ -13,6 +16,7 @@ import '../../../../core/helpers/require_auth.dart';
 import '../../../../core/services/supabase/index.dart';
 import '../../../../core/utils/storage_image.dart';
 import '../../../../di/injector.dart';
+import '../../../chat/presentation/screen/message_screen.dart';
 import '../../../video/domain/entities/video_entity.dart';
 import '../bloc/profile_bloc.dart';
 
@@ -25,8 +29,8 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) =>
-      ProfileBloc(profileRepo: sl(), getUserVideos: sl())
-        ..add(ProfileLoadRequested(userId)),
+          ProfileBloc(profileRepo: sl(), getUserVideos: sl())
+            ..add(ProfileLoadRequested(userId)),
       child: _ProfileView(userId: userId),
     );
   }
@@ -58,6 +62,52 @@ class _ProfileViewState extends State<_ProfileView>
     super.dispose();
   }
 
+  Future<void> _pickAndUploadAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 512,
+      maxHeight: 512,
+    );
+    if (picked == null || !mounted) return;
+
+    context.read<ProfileBloc>().add(
+      ProfileAvatarUpdateRequested(picked.path),
+    );
+  }
+
+  Future<void> _openMessageScreen(
+    BuildContext context,
+    String otherUserId,
+  ) async {
+    // Tạo hoặc lấy conversation, rồi navigate
+    final convBloc = ConversationBloc(
+      getConversations: sl(),
+      getOrCreateConversation: sl(),
+      searchUsers: sl(),
+    );
+
+    final result = await sl<GetOrCreateConversationUseCase>()(otherUserId);
+    convBloc.close();
+
+    result.fold(
+      (failure) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(failure.message)));
+      },
+      (conversation) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MessageScreen(conversation: conversation),
+          ),
+        );
+      },
+    );
+  }
+
   void _openProfileFeed(BuildContext context, int initialIndex) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -67,10 +117,8 @@ class _ProfileViewState extends State<_ProfileView>
           value: context.read<ProfileBloc>(),
           child: ProfileFeedScreen(initialIndex: initialIndex),
         ),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 220),
       ),
     );
@@ -104,7 +152,7 @@ class _ProfileViewState extends State<_ProfileView>
           final profile = state.profile;
           final isMe =
               profile.isCurrentUser ||
-                  SupabaseService.currentUserId == profile.id;
+              SupabaseService.currentUserId == profile.id;
 
           return NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) => [
@@ -142,18 +190,27 @@ class _ProfileViewState extends State<_ProfileView>
                   if (isMe) ...[
                     IconButton(
                       tooltip: 'Thêm nội dung',
-                      icon: const Icon(Icons.add_box_outlined, color: Colors.black87),
+                      icon: const Icon(
+                        Icons.add_box_outlined,
+                        color: Colors.black87,
+                      ),
                       onPressed: () {},
                     ),
                     IconButton(
                       tooltip: 'Menu',
-                      icon: const Icon(Icons.menu_rounded, color: Colors.black87),
+                      icon: const Icon(
+                        Icons.menu_rounded,
+                        color: Colors.black87,
+                      ),
                       onPressed: () => _showOwnerMenu(context),
                     ),
                   ] else
                     IconButton(
                       tooltip: 'Thêm',
-                      icon: const Icon(Icons.more_horiz_rounded, color: Colors.black87),
+                      icon: const Icon(
+                        Icons.more_horiz_rounded,
+                        color: Colors.black87,
+                      ),
                       onPressed: () => _showViewerMenu(context),
                     ),
                 ],
@@ -164,10 +221,12 @@ class _ProfileViewState extends State<_ProfileView>
                   isMe: isMe,
                   onEdit: () => _showEditProfile(ctx, state),
                   onFollow: () => ctx.requireAuth(
-                        () => ctx.read<ProfileBloc>().add(
+                    () => ctx.read<ProfileBloc>().add(
                       ProfileFollowToggled(profile.id),
                     ),
                   ),
+                  onAvatarTap: _pickAndUploadAvatar,
+                  onMessage: () => _openMessageScreen(context, profile.id),
                 ),
               ),
               SliverPersistentHeader(
@@ -207,7 +266,9 @@ class _ProfileViewState extends State<_ProfileView>
                   icon: isMe
                       ? Icons.lock_outline_rounded
                       : Icons.video_library_outlined,
-                  title: isMe ? 'Chỉ bạn có thể nhìn thấy' : 'Không có danh sách phát công khai',
+                  title: isMe
+                      ? 'Chỉ bạn có thể nhìn thấy'
+                      : 'Không có danh sách phát công khai',
                   subtitle: isMe
                       ? 'Video riêng tư và bản nháp sẽ xuất hiện ở đây'
                       : 'Người sáng tạo này chưa chia sẻ bất kỳ bộ sưu tập nào.',
@@ -261,9 +322,7 @@ class _ProfileViewState extends State<_ProfileView>
               alignment: Alignment.centerRight,
               child: SlideTransition(
                 position: slide,
-                child: _OwnerSideMenu(
-                  onClose: () => Navigator.of(ctx).pop(),
-                ),
+                child: _OwnerSideMenu(onClose: () => Navigator.of(ctx).pop()),
               ),
             ),
           ],
@@ -370,12 +429,16 @@ class _ProfileHeader extends StatelessWidget {
   final bool isMe;
   final VoidCallback onEdit;
   final VoidCallback onFollow;
+  final VoidCallback onAvatarTap;
+  final VoidCallback? onMessage;
 
   const _ProfileHeader({
     required this.state,
     required this.isMe,
     required this.onEdit,
     required this.onFollow,
+    required this.onAvatarTap,
+    required this.onMessage,
   });
 
   @override
@@ -393,7 +456,12 @@ class _ProfileHeader extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _ProfileAvatar(avatarPath: profile.avatarUrl, canAdd: isMe),
+          _ProfileAvatar(
+            avatarPath: profile.avatarUrl,
+            canAdd: isMe,
+            isUploading: state.isUploadingAvatar,
+            onTap: isMe ? onAvatarTap : null,
+          ),
           const SizedBox(height: AppSizes.md),
           if (displayName != null && displayName.isNotEmpty)
             Text(
@@ -468,7 +536,7 @@ class _ProfileHeader extends StatelessWidget {
                   child: _ProfileActionButton(
                     label: 'Nhắn tin',
                     icon: Icons.chat_bubble_outline_rounded,
-                    onPressed: () {},
+                    onPressed: onMessage,
                   ),
                 ),
                 const SizedBox(width: AppSizes.sm),
@@ -487,8 +555,16 @@ class _ProfileHeader extends StatelessWidget {
 class _ProfileAvatar extends StatelessWidget {
   final String? avatarPath;
   final bool canAdd;
+  final bool isUploading;
+  final VoidCallback? onTap;
 
-  const _ProfileAvatar({required this.avatarPath, required this.canAdd});
+
+  const _ProfileAvatar({
+    required this.avatarPath,
+    required this.canAdd,
+    this.isUploading = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -508,7 +584,16 @@ class _ProfileAvatar extends StatelessWidget {
               ? const Icon(Icons.person, size: 48, color: Color(0xFFAAAAAA))
               : null,
         ),
-        if (canAdd)
+        if (isUploading)
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        if (canAdd && !isUploading)
           Positioned(
             right: -1,
             bottom: 2,
@@ -726,7 +811,7 @@ class _VideoGrid extends StatelessWidget {
                   placeholder: (context, url) =>
                       Container(color: const Color(0xFFE8E8E8)),
                   errorWidget: (context, url, error) =>
-                  const _VideoPlaceholder(),
+                      const _VideoPlaceholder(),
                 )
               else
                 const _VideoPlaceholder(),
@@ -963,10 +1048,10 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context,
-      double shrinkOffset,
-      bool overlapsContent,
-      ) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -1014,7 +1099,10 @@ class _OwnerSideMenu extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: onClose,
-                      icon: const Icon(Icons.close_rounded, color: Colors.black45),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.black45,
+                      ),
                       style: IconButton.styleFrom(
                         backgroundColor: Colors.black12,
                         padding: EdgeInsets.zero,

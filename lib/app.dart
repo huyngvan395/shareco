@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shareco/core/layout/app_shell.dart';
+import 'package:shareco/core/navigation/app_route_observer.dart';
 import 'package:shareco/core/notifier/auth_notifier.dart';
 import 'package:shareco/routes/app_router.dart';
 
@@ -29,11 +31,13 @@ class _AppState extends State<App> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'Shareco',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
-      routerConfig: AppRouter.router(widget.authNotifier),
+    return AppShell(
+      child: MaterialApp.router(
+        title: 'Shareco',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple)),
+        routerConfig: _router,
+      ),
     );
   }
 }

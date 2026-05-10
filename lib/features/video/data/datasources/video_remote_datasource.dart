@@ -3,6 +3,8 @@
 import 'dart:developer' as dev;
 
 import 'package:flutter/foundation.dart';
+import 'package:shareco/core/notifier/auth_notifier.dart';
+import 'package:shareco/di/injector.dart';
 
 import '../../../../core/constants/env.dart';
 import '../../../../core/errors/exception.dart';
@@ -89,12 +91,15 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
   @override
   Future<PaginatedResult<VideoModel>> getForYouFeed({int page = 0}) async {
     try {
-      final query = SupabaseService.from(_table)
+      final authNotifier = sl<AuthNotifier>();
+      var query = SupabaseService.from(_table)
           .select(_select)
           .eq('status', 'published')
-          .eq('visibility', 'public')
-          .order('published_at', ascending: false);
-      return _paginate(query, page);
+          .eq('visibility', 'public');
+      if (authNotifier.userId != null) {
+        query = query.neq('author_id', authNotifier.userId!);
+      }
+      return _paginate(query.order('published_at', ascending: false), page);
     } catch (e) {
       throw ServerException(e.toString());
     }

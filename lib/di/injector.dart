@@ -2,10 +2,14 @@
 
 import 'package:get_it/get_it.dart';
 import 'package:shareco/core/services/cloudinary/cloudinary_service.dart';
+import 'package:shareco/core/services/media/audio_recorder_service.dart';
+import 'package:shareco/core/services/media/image_picker_service.dart';
+import 'package:shareco/core/services/supabase/presence_service.dart';
 import 'package:shareco/features/chat/data/datasources/chat_remote_datasource.dart';
 import 'package:shareco/features/chat/data/repositories/chat_repository_impl.dart';
 import 'package:shareco/features/chat/domain/repositories/chat_repository.dart';
 import 'package:shareco/features/chat/domain/usecases/chat_usecases.dart';
+import 'package:shareco/features/chat/domain/usecases/upload_media_usecase.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_bloc.dart';
 import 'package:shareco/features/chat/presentation/bloc/message_bloc.dart';
 import 'package:shareco/features/comment/data/datasources/comment_remote_datasource.dart';
@@ -90,6 +94,9 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton(() => ThemeProvider());
   sl.registerLazySingleton(() => AuthNotifier());
   sl.registerLazySingleton(() => CloudinaryService());
+  sl.registerLazySingleton(() => PresenceService());
+  sl.registerLazySingleton(() => AudioRecorderService());
+  sl.registerLazySingleton(() => ImagePickerService());
 
   sl.registerLazySingleton<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(),
@@ -99,7 +106,6 @@ Future<void> setupInjector() async {
   );
   sl.registerLazySingleton(() => LoginUseCase(sl()));
   sl.registerLazySingleton(() => RegisterUseCase(sl()));
-
 
   // Ecommerce: Product
   sl.registerLazySingleton<ProductRemoteDataSource>(
@@ -111,12 +117,8 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton(() => GetProductsUseCase(sl()));
   sl.registerLazySingleton(() => GetProductDetailUseCase(sl()));
   sl.registerLazySingleton(() => GetFlashSaleProductsUseCase(repository: sl()));
-  sl.registerFactory(
-    () => ProductListBloc(getProductsUseCase: sl()),
-  );
-  sl.registerFactory(
-    () => ProductDetailBloc(getProductDetailUseCase: sl()),
-  );
+  sl.registerFactory(() => ProductListBloc(getProductsUseCase: sl()));
+  sl.registerFactory(() => ProductDetailBloc(getProductDetailUseCase: sl()));
 
   // Ecommerce: Address
   sl.registerLazySingleton<AddressRemoteDataSource>(
@@ -167,10 +169,7 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton(() => PlaceOrderUseCase(sl()));
   sl.registerLazySingleton(() => PlaceDirectOrderUseCase(sl()));
   sl.registerFactory(
-    () => CheckoutBloc(
-      placeOrderUseCase: sl(),
-      placeDirectOrderUseCase: sl(),
-    ),
+    () => CheckoutBloc(placeOrderUseCase: sl(), placeDirectOrderUseCase: sl()),
   );
 
   // Ecommerce: Orders
@@ -183,14 +182,10 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton(() => GetOrdersUseCase(sl()));
   sl.registerLazySingleton(() => GetOrderDetailUseCase(sl()));
   sl.registerLazySingleton(() => CancelOrderUseCase(sl()));
+  sl.registerFactory(() => OrderListBloc(getOrdersUseCase: sl()));
   sl.registerFactory(
-    () => OrderListBloc(getOrdersUseCase: sl()),
-  );
-  sl.registerFactory(
-    () => OrderDetailBloc(
-      getOrderDetailUseCase: sl(),
-      cancelOrderUseCase: sl(),
-    ),
+    () =>
+        OrderDetailBloc(getOrderDetailUseCase: sl(), cancelOrderUseCase: sl()),
   );
 
   // Ecommerce: Shop
@@ -218,9 +213,7 @@ Future<void> setupInjector() async {
   );
   sl.registerLazySingleton(() => SubmitReviewUseCase(sl()));
   sl.registerLazySingleton(() => GetProductReviewsUseCase(repository: sl()));
-  sl.registerFactory(
-    () => ReviewBloc(submitReviewUseCase: sl()),
-  );
+  sl.registerFactory(() => ReviewBloc(submitReviewUseCase: sl()));
   sl.registerLazySingleton<VideoRemoteDataSource>(
     () => VideoRemoteDataSourceImpl(sl()),
   );
@@ -252,53 +245,63 @@ Future<void> setupInjector() async {
 
   // Comment
   sl.registerLazySingleton<CommentRemoteDataSource>(
-          () => CommentRemoteDataSourceImpl());
+    () => CommentRemoteDataSourceImpl(),
+  );
   sl.registerLazySingleton<CommentRepository>(
-          () => CommentRepositoryImpl(remote: sl()));
+    () => CommentRepositoryImpl(remote: sl()),
+  );
   sl.registerFactory(() => CommentBloc(repo: sl()));
 
   // Profile
   sl.registerLazySingleton<ProfileRemoteDataSource>(
-          () => ProfileRemoteDataSourceImpl());
+    () => ProfileRemoteDataSourceImpl(),
+  );
   sl.registerLazySingleton<ProfileRepository>(
-          () => ProfileRepositoryImpl(remote: sl()));
+    () => ProfileRepositoryImpl(remote: sl()),
+  );
 
   // Notification
   sl.registerLazySingleton<NotificationRemoteDataSource>(
-          () => NotificationRemoteDataSourceImpl());
+    () => NotificationRemoteDataSourceImpl(),
+  );
   sl.registerLazySingleton<NotificationRepository>(
-          () => NotificationRepositoryImpl(remote: sl()));
+    () => NotificationRepositoryImpl(remote: sl()),
+  );
 
   // Chat
   sl.registerLazySingleton<ChatRemoteDataSource>(
-      () => ChatRemoteDataSourceImpl()
+    () => ChatRemoteDataSourceImpl(presenceService: sl()),
   );
   sl.registerLazySingleton<ChatRepository>(
-      () => ChatRepositoryImpl(remote: sl())
+    () => ChatRepositoryImpl(remote: sl(),cloudinaryService: sl(),),
   );
-  sl.registerLazySingleton(()=>GetConversationsUseCase(sl()));
-  sl.registerLazySingleton(()=>GetOrCreateConversationUseCase(sl()));
-  sl.registerLazySingleton(()=>GetMessagesUseCase(sl()));
-  sl.registerLazySingleton(()=>SendMessageUseCase(sl()));
-  sl.registerLazySingleton(()=>DeleteMessageUseCase(sl()));
-  sl.registerLazySingleton(()=>MarkAsReadUseCase(sl()));
-  sl.registerLazySingleton(()=>WatchMessagesUseCase(sl()));
-  sl.registerLazySingleton(()=>SearchUsersUseCase(sl()));
+  sl.registerLazySingleton(() => GetConversationsUseCase(sl()));
+  sl.registerLazySingleton(() => GetOrCreateConversationUseCase(sl()));
+  sl.registerLazySingleton(() => GetMessagesUseCase(sl()));
+  sl.registerLazySingleton(() => SendMessageUseCase(sl()));
+  sl.registerLazySingleton(() => DeleteMessageUseCase(sl()));
+  sl.registerLazySingleton(() => MarkAsReadUseCase(sl()));
+  sl.registerLazySingleton(() => WatchMessagesUseCase(sl()));
+  sl.registerLazySingleton(() => SearchUsersUseCase(sl()));
+  sl.registerLazySingleton(() => WatchUserPresenceUseCase(sl()));
+  sl.registerLazySingleton(() => UploadMediaUseCase(sl()));
 
   sl.registerFactory(
-      () => ConversationBloc(
-          getConversations: sl(),
-          getOrCreateConversation: sl(),
-          searchUsers: sl()
-      )
+    () => ConversationBloc(
+      getConversations: sl(),
+      getOrCreateConversation: sl(),
+      searchUsers: sl(),
+    ),
   );
   sl.registerFactory(
-      () => MessageBloc(
-          getMessages: sl(),
-          sendMessage: sl(),
-          deleteMessage: sl(),
-          markAsRead: sl(),
-          watchMessages: sl(),
-      )
+    () => MessageBloc(
+      getMessages: sl(),
+      sendMessage: sl(),
+      deleteMessage: sl(),
+      markAsRead: sl(),
+      watchMessages: sl(),
+      watchUserPresence: sl(),
+      uploadMedia: sl(),
+    ),
   );
 }

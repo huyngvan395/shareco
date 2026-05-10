@@ -35,15 +35,17 @@ class SendMessageUseCase {
   const SendMessageUseCase(this.repo);
   Future<Either<Failure, MessageEntity>> call({
     required String conversationId,
-    required String content,
+    String? content,
     MessageType type = MessageType.text,
     String? replyToId,
+    String? mediaUrl,
   }) =>
       repo.sendMessage(
         conversationId: conversationId,
         content: content,
         type: type,
         replyToId: replyToId,
+        mediaUrl: mediaUrl,
       );
 }
 
@@ -73,4 +75,12 @@ class SearchUsersUseCase {
   const SearchUsersUseCase(this.repo);
   Future<Either<Failure, List<ProfileStub>>> call(String query) =>
       repo.searchUsers(query);
+}
+
+class WatchUserPresenceUseCase {
+  final ChatRepository _repo;
+  WatchUserPresenceUseCase(this._repo);
+
+  Stream<Map<String, dynamic>> call(String userId) =>
+      _repo.watchUserPresence(userId);
 }
