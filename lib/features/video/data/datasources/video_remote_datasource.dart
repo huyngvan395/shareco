@@ -31,6 +31,7 @@ abstract class VideoRemoteDataSource {
   Future<VideoModel> updateVideo(
       {required String videoId, required Map<String, dynamic> data});
   Future<void> deleteVideo(String videoId);
+  Future<List<VideoModel>> searchVideos(String query);
 }
 
 class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
@@ -275,5 +276,28 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
     } catch (e) {
       throw ServerException(e.toString());
     }
+  }
+
+  @override
+  Future<List<VideoModel>> searchVideos(String query) async {
+    final rows = await SupabaseService.rpc(
+      'search_videos',
+      params: {
+        'p_query': query,
+      },
+    ) as List;
+
+    if (rows.isEmpty) return [];
+
+    final ids = rows.map((e) => e['id']).toList();
+
+    final full = await SupabaseService
+        .from('videos')
+        .select(_select)
+        .inFilter('id', ids);
+
+    return (full as List)
+        .map((e) => VideoModel.fromJson(e))
+        .toList();
   }
 }

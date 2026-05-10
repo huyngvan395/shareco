@@ -68,6 +68,8 @@ dependencies:
   path_provider: ^2.1.5
   record: ^6.2.0
 
+  agora_rtc_engine: ^6.5.3
+
 
 dev_dependencies:
   flutter_test:

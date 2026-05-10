@@ -361,9 +361,6 @@ class _ProfileViewState extends State<_ProfileView>
   }
 
   void _showEditProfile(BuildContext context, ProfileLoaded state) {
-    final nameCtrl = TextEditingController(text: state.profile.displayName);
-    final bioCtrl = TextEditingController(text: state.profile.bio);
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -371,56 +368,11 @@ class _ProfileViewState extends State<_ProfileView>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSizes.xl,
-          right: AppSizes.xl,
-          top: AppSizes.lg,
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + AppSizes.xl,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const _SheetHandle(),
-            const Text(
-              'Sửa hồ sơ',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: AppSizes.xl),
-            _ProfileTextField(
-              controller: nameCtrl,
-              label: 'Tên hiển thị',
-              maxLines: 1,
-            ),
-            const SizedBox(height: AppSizes.md),
-            _ProfileTextField(controller: bioCtrl, label: 'Bio', maxLines: 3),
-            const SizedBox(height: AppSizes.xl),
-            _ProfileActionButton(
-              label: 'Lưu',
-              isPrimary: true,
-              onPressed: () {
-                context.read<ProfileBloc>().add(
-                  ProfileUpdateRequested(
-                    displayName: nameCtrl.text.trim(),
-                    bio: bioCtrl.text.trim(),
-                  ),
-                );
-                Navigator.pop(sheetContext);
-              },
-            ),
-          ],
-        ),
+      builder: (_) => BlocProvider.value(
+        value: context.read<ProfileBloc>(),
+        child: _EditProfileSheet(state: state),
       ),
-    ).whenComplete(() {
-      nameCtrl.dispose();
-      bioCtrl.dispose();
-    });
+    );
   }
 }
 
@@ -573,42 +525,45 @@ class _ProfileAvatar extends StatelessWidget {
         ? CachedNetworkImageProvider(StorageImage.avatarUrl(avatarPath!))
         : null;
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CircleAvatar(
-          radius: 48,
-          backgroundColor: const Color(0xFFE8E8E8),
-          backgroundImage: imageProvider,
-          child: imageProvider == null
-              ? const Icon(Icons.person, size: 48, color: Color(0xFFAAAAAA))
-              : null,
-        ),
-        if (isUploading)
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: isUploading?  null: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CircleAvatar(
+            radius: 48,
+            backgroundColor: const Color(0xFFE8E8E8),
+            backgroundImage: imageProvider,
+            child: imageProvider == null
+                ? const Icon(Icons.person, size: 48, color: Color(0xFFAAAAAA))
+                : null,
+          ),
+          if (isUploading)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
-          ),
-        if (canAdd && !isUploading)
-          Positioned(
-            right: -1,
-            bottom: 2,
-            child: Container(
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 3),
+          if (canAdd && !isUploading)
+            Positioned(
+              right: -1,
+              bottom: 2,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+                child: const Icon(Icons.add, color: Colors.white, size: 14),
               ),
-              child: const Icon(Icons.add, color: Colors.white, size: 14),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1145,6 +1100,101 @@ class _OwnerSideMenu extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _EditProfileSheet extends StatefulWidget {
+  final ProfileLoaded state;
+
+  const _EditProfileSheet({required this.state});
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController nameCtrl;
+  late final TextEditingController bioCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+
+    nameCtrl = TextEditingController(
+      text: widget.state.profile.displayName,
+    );
+
+    bioCtrl = TextEditingController(
+      text: widget.state.profile.bio,
+    );
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    bioCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: AppSizes.xl,
+        right: AppSizes.xl,
+        top: AppSizes.lg,
+        bottom:
+        MediaQuery.of(context).viewInsets.bottom + AppSizes.xl,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _SheetHandle(),
+          const Text(
+            'Sửa hồ sơ',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: AppSizes.xl),
+
+          _ProfileTextField(
+            controller: nameCtrl,
+            label: 'Tên hiển thị',
+            maxLines: 1,
+          ),
+
+          const SizedBox(height: AppSizes.md),
+
+          _ProfileTextField(
+            controller: bioCtrl,
+            label: 'Bio',
+            maxLines: 3,
+          ),
+
+          const SizedBox(height: AppSizes.xl),
+
+          _ProfileActionButton(
+            label: 'Lưu',
+            isPrimary: true,
+            onPressed: () {
+              context.read<ProfileBloc>().add(
+                ProfileUpdateRequested(
+                  displayName: nameCtrl.text.trim(),
+                  bio: bioCtrl.text.trim(),
+                ),
+              );
+
+              Navigator.pop(context);
+            },
+          ),
+        ],
       ),
     );
   }

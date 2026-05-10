@@ -23,14 +23,21 @@ import 'package:shareco/features/ecommerce/review/presentation/screen/review_for
 import 'package:shareco/features/ecommerce/shop/presentation/screen/shop_profile_screen.dart';
 import 'package:shareco/features/ecommerce/shop/presentation/screen/seller_registration_screen.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_bloc.dart';
+import 'package:shareco/features/feed/presentation/bloc/search_bloc.dart';
 import 'package:shareco/features/feed/presentation/screen/feed_screen.dart';
+import 'package:shareco/features/feed/presentation/screen/search_feed_screen.dart';
+import 'package:shareco/features/feed/presentation/screen/search_screen.dart';
 import 'package:shareco/features/profile/presentation/screen/profile_screen.dart';
+import 'package:shareco/features/video/domain/entities/video_entity.dart';
+import 'package:shareco/features/video/domain/repositories/video_repository.dart';
 import 'package:shareco/features/video/presentation/screen/create_video_screen.dart';
 
 class Routes {
   static const login = "/login";
   static const register = "/register";
   static const feed = "/feed";
+  static const searchFeed = "/search-feed";
+  static const searchFeedViewer = "/search-feed-viewer";
   static const profile = "/profile";
   static const profileDetail = "/profile/:id";
 
@@ -142,6 +149,27 @@ class AppRouter {
           final conversation = state.extra;
           return MessageScreen(
             conversation: conversation as ConversationEntity,
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.searchFeed,
+        builder: (context, _) {
+          return BlocProvider(
+            create: (_) => SearchBloc(
+              videoRepository: sl<VideoRepository>(),
+            ),
+            child: const SearchScreen(),
+          );
+        },
+      ),
+      GoRoute(
+        path: Routes.searchFeedViewer,
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return SearchFeedScreen(
+            videos: extra['videos'] as List<VideoEntity>,
+            initialIndex: extra['initialIndex'] as int,
           );
         },
       ),

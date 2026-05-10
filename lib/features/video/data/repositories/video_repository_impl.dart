@@ -135,4 +135,11 @@ class VideoRepositoryImpl implements VideoRepository {
       return _handle(e);
     }
   }
+
+  @override
+  Future<List<VideoEntity>> searchVideos(String query) async {
+    return await remote.searchVideos(query);
+  }
+
+
 }

@@ -51,4 +51,6 @@ abstract class VideoRepository {
 
   /// Xóa video
   Future<Either<Failure, void>> deleteVideo(String videoId);
+
+  Future<List<VideoEntity>> searchVideos(String query);
 }

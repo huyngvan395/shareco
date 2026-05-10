@@ -31,13 +31,14 @@ class CreateVideoPickedFile extends CreateVideoState {
   });
 
   CreateVideoPickedFile copyWith({
+    String? thumbnailPath,
     String? visibility,
     bool? allowComment,
     bool? allowDuet,
     bool? allowStitch,
   }) => CreateVideoPickedFile(
     localPath: localPath,
-    thumbnailPath: thumbnailPath,
+    thumbnailPath: thumbnailPath ?? this.thumbnailPath,
     visibility: visibility ?? this.visibility,
     allowComment: allowComment ?? this.allowComment,
     allowDuet: allowDuet ?? this.allowDuet,

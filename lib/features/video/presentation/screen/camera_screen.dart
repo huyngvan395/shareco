@@ -181,12 +181,12 @@ class _CameraViewState extends State<_CameraView> with WidgetsBindingObserver {
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => ctx.read<CameraBloc>().add(const CameraInitRequested()),
-                child: const Text('Retry', style: TextStyle(color: AppColors.primary)),
+                child: const Text('Thử lại', style: TextStyle(color: AppColors.primary)),
               ),
             ] else ...[
               const CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
               const SizedBox(height: 16),
-              const Text('Starting camera...', style: TextStyle(color: Colors.white38)),
+              const Text('Đang khởi động camera...', style: TextStyle(color: Colors.white38)),
             ],
           ]),
         ),
@@ -214,7 +214,7 @@ class _CameraViewState extends State<_CameraView> with WidgetsBindingObserver {
   // ── Tab bar ─────────────────────────────────────────────────────────────────
 
   Widget _buildTabBar() {
-    const tabs = ['Camera', 'Upload', 'Templates'];
+    const tabs = ['Camera', 'Tải lên', 'Mẫu'];
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: tabs.asMap().entries.map((e) {
@@ -273,8 +273,8 @@ class _CameraViewState extends State<_CameraView> with WidgetsBindingObserver {
               const SizedBox(height: 8),
               Text(
                 state.isRecording
-                    ? (state.isPaused ? 'Tap to Resume' : 'Tap to Pause')
-                    : 'Tap to Record',
+                    ? (state.isPaused ? 'Nhấn để tiếp tục' : 'Nhấn để tạm dừng')
+                    : 'Nhấn để quay',
                 style: const TextStyle(color: Colors.white54, fontSize: 11),
               ),
             ]),

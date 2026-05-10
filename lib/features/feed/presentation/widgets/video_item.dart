@@ -362,7 +362,7 @@ class _VideoItemState extends State<VideoItem>
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  'Original sound · ${v.author.username}',
+                  'Âm thanh gốc · ${v.author.username}',
                   style: const TextStyle(color: Colors.white, fontSize: 12),
                   overflow: TextOverflow.ellipsis,
                 ),

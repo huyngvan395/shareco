@@ -12,7 +12,7 @@ class CreateVideoPickRequested extends CreateVideoEvent {
 
 class CreateVideoPickedFromPath extends CreateVideoEvent {
   final String localPath;
-  final String thumbnailPath;
+  final String? thumbnailPath;
   const CreateVideoPickedFromPath({required this.localPath, required this.thumbnailPath});
   @override List<Object?> get props => [localPath, thumbnailPath];
 }
@@ -43,4 +43,18 @@ class CreateVideoPostRequested extends CreateVideoEvent {
   final String caption;
   const CreateVideoPostRequested({required this.caption});
   @override List<Object?> get props => [caption];
+}
+
+class CreateVideoThumbnailChanged extends CreateVideoEvent {
+  final String thumbnailPath;
+  const CreateVideoThumbnailChanged({required this.thumbnailPath});
+}
+
+class CreateVideoUploadProgressChanged extends CreateVideoEvent {
+  final double progress;
+
+  const CreateVideoUploadProgressChanged(this.progress);
+
+  @override
+  List<Object> get props => [progress];
 }

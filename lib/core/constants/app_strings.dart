@@ -13,14 +13,14 @@ abstract class AppStrings {
   static const tabProfile = 'Hồ sơ';
 
   // Feed
-  static const feedForYou = 'For You';
+  static const feedForYou = 'Dành cho bạn';
   static const feedMixed = 'Feed';
 
   // Actions
-  static const like = 'Like';
-  static const comment = 'Comment';
+  static const like = 'Thích';
+  static const comment = 'Bình luận';
   static const share = 'Share';
-  static const follow = 'Follow';
+  static const follow = 'Chia sẻ';
 
   // Auth
   static const login = 'Đăng nhập';

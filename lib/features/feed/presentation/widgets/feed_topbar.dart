@@ -1,7 +1,9 @@
 // features/feed/presentation/widgets/feed_topbar.dart
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_event.dart';
+import 'package:shareco/routes/app_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../bloc/feed_bloc.dart';
@@ -33,7 +35,9 @@ class FeedTopBar extends StatelessWidget {
             _Tab(label: 'Dành cho bạn', isActive: activeTab == FeedTab.forYou,
                 onTap: () => onTabChanged(FeedTab.forYou)),
             const Spacer(),
-            IconButton(icon: const Icon(Icons.search_rounded, color: Colors.white, size: AppSizes.iconLg), onPressed: () {}),
+            IconButton(icon: const Icon(
+                Icons.search_rounded, color: Colors.white, size: AppSizes.iconLg),
+                onPressed: () => context.push(Routes.searchFeed)),
           ]),
         ),
       ),

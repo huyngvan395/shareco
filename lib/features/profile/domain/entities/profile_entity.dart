@@ -72,5 +72,5 @@ class ProfileEntity extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, username, followerCount, followingCount, isFollowing, isCurrentUser];
+      [id, username, followerCount, followingCount, isFollowing, isCurrentUser, bio, avatarUrl, displayName];
 }
