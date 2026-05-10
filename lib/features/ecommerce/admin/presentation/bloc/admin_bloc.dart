@@ -8,6 +8,7 @@ import 'package:shareco/features/ecommerce/order/domain/entities/order_item.dart
 
 import 'admin_event.dart';
 import 'admin_state.dart';
+import '../screen/admin_login_screen.dart';
 
 class AdminBloc extends Bloc<AdminEvent, AdminState> {
   AdminBloc() : super(const AdminState()) {
@@ -168,11 +169,21 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   Future<void> _onCreateProduct(AdminCreateProduct event, Emitter<AdminState> emit) async {
     emit(state.copyWith(status: AdminStatus.loading));
     try {
+      // Fetch shop name to extract short brand name (e.g. L'Oreal Paris -> L'Oreal)
+      final shopData = await Supabase.instance.client
+          .from('shops')
+          .select('shop_name')
+          .eq('id', event.shopId)
+          .single();
+      final shopName = shopData['shop_name'] as String? ?? '';
+      final brandName = shopName.isNotEmpty ? shopName.split(' ').first : null;
+
       final productResult = await Supabase.instance.client.from('products').insert({
         'shop_id': event.shopId,
         'category_id': event.categoryId,
         'title': event.title,
         'description': event.description,
+        'brand': brandName,
         'price_min': event.price,
         'price_max': event.price,
         'original_price': event.originalPrice,
@@ -190,23 +201,32 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       if (event.variants.isNotEmpty) {
         final insertVariants = event.variants.map((v) => {
           'product_id': productId,
+          'sku': 'SKU-${productId.split('-').first.toUpperCase()}-${(v['name'] as String).toUpperCase().replaceAll(' ', '')}',
           'variant_name': v['name'],
           'price': (v['price'] as num).toDouble(),
+          'compare_at_price': event.originalPrice,
+          'original_price': event.originalPrice,
           'stock_qty': v['stock'] as int,
+          'weight_grams': 200,
           'status': 'active',
         }).toList();
         await Supabase.instance.client.from('product_variants').insert(insertVariants);
       } else {
         await Supabase.instance.client.from('product_variants').insert({
           'product_id': productId,
+          'sku': 'SKU-${productId.split('-').first.toUpperCase()}-STANDARD',
           'variant_name': 'Tiêu chuẩn',
           'price': event.price,
+          'compare_at_price': event.originalPrice,
+          'original_price': event.originalPrice,
           'stock_qty': event.stock,
+          'weight_grams': 200,
           'status': 'active',
         });
       }
 
-      add(AdminFetchProducts());
+      final currentShopId = AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+      add(AdminFetchProducts(shopId: currentShopId));
     } catch (e) {
       emit(state.copyWith(
         status: AdminStatus.failure,
@@ -218,9 +238,21 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   Future<void> _onUpdateProduct(AdminUpdateProduct event, Emitter<AdminState> emit) async {
     emit(state.copyWith(status: AdminStatus.loading));
     try {
+      // Fetch shop name to extract short brand name (e.g. L'Oreal Paris -> L'Oreal)
+      final shopData = await Supabase.instance.client
+          .from('shops')
+          .select('shop_name')
+          .eq('id', event.shopId)
+          .single();
+      final shopName = shopData['shop_name'] as String? ?? '';
+      final brandName = shopName.isNotEmpty ? shopName.split(' ').first : null;
+
       await Supabase.instance.client.from('products').update({
+        'shop_id': event.shopId,
+        'category_id': event.categoryId,
         'title': event.title,
         'description': event.description,
+        'brand': brandName,
         'price_min': event.price,
         'price_max': event.price,
         'original_price': event.originalPrice,
@@ -230,10 +262,13 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
 
       await Supabase.instance.client.from('product_variants').update({
         'price': event.price,
+        'compare_at_price': event.originalPrice,
+        'original_price': event.originalPrice,
         'stock_qty': event.stock,
       }).eq('product_id', event.productId).eq('variant_name', 'Tiêu chuẩn');
 
-      add(AdminFetchProducts());
+      final currentShopId = AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+      add(AdminFetchProducts(shopId: currentShopId));
     } catch (e) {
       emit(state.copyWith(
         status: AdminStatus.failure,
@@ -249,7 +284,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         'status': 'inactive',
       }).eq('id', event.productId);
 
-      add(AdminFetchProducts());
+      final currentShopId = AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+      add(AdminFetchProducts(shopId: currentShopId));
     } catch (e) {
       emit(state.copyWith(
         status: AdminStatus.failure,
@@ -261,13 +297,19 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   Future<void> _onFetchOrders(AdminFetchOrders event, Emitter<AdminState> emit) async {
     emit(state.copyWith(status: AdminStatus.loading));
     try {
-      final response = await Supabase.instance.client.from('orders').select('''
+      dynamic query = Supabase.instance.client.from('orders').select('''
         *,
         order_items (
           *,
           products (title, cover_path)
         )
-      ''').order('placed_at', ascending: false);
+      ''');
+
+      if (event.shopId != null) {
+        query = query.eq('shop_id', event.shopId!);
+      }
+
+      final response = await query.order('placed_at', ascending: false);
 
       final orderList = List<Map<String, dynamic>>.from(response).map((o) {
         final rawItems = List<Map<String, dynamic>>.from(o['order_items'] ?? []);
@@ -325,7 +367,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', event.orderId);
 
-      add(AdminFetchOrders());
+      final currentShopId = AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+      add(AdminFetchOrders(shopId: currentShopId));
     } catch (e) {
       emit(state.copyWith(
         status: AdminStatus.failure,

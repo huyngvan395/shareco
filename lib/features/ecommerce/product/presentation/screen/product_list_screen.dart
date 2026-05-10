@@ -15,11 +15,15 @@ import '../bloc/product_list/product_list_event.dart';
 import '../bloc/product_list/product_list_state.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:io';
 import 'package:dartz/dartz.dart' hide State;
 import '../../../../../core/errors/failure.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/usecases/get_flash_sale_products_usecase.dart';
 import '../widgets/product_card.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../../../core/services/ai/ai_search_service.dart';
+import '../widgets/ai_scanning_overlay.dart';
 
 class ProductListScreen extends StatefulWidget {
   final String? brand;
@@ -34,6 +38,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
   late final ProductListBloc _bloc;
   late final CartBloc _cartBloc;
   final _searchCtrl = TextEditingController();
+
+  File? _scannedImageFile;
+  Future<String?>? _analysisFuture;
+  String? _aiSearchKeyword;
 
   @override
   void initState() {
@@ -63,6 +71,174 @@ class _ProductListScreenState extends State<ProductListScreen> {
     _bloc.add(ProductListRequested(search: search, brand: widget.brand));
   }
 
+  void _onCameraTap() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E1E2C),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Tìm kiếm sản phẩm bằng AI 🧠',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Outfit',
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Hãy chụp ảnh hoặc chọn ảnh từ máy để AI tự động tìm sản phẩm',
+                style: TextStyle(
+                  color: Colors.white60,
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickAndScanImage(ImageSource.camera);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(Icons.camera_alt_rounded, color: Color(0xFFEE4D2D), size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Chụp ảnh mới',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickAndScanImage(ImageSource.gallery);
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: const Column(
+                          children: [
+                            Icon(Icons.image_search_rounded, color: Colors.blueAccent, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Chọn từ thư viện',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _pickAndScanImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 80,
+      );
+
+      if (pickedFile == null) return;
+
+      final file = File(pickedFile.path);
+      
+      setState(() {
+        _scannedImageFile = file;
+        _analysisFuture = AiSearchService.analyzeProductImage(file);
+      });
+
+      final keyword = await _analysisFuture;
+
+      if (keyword != null && keyword.trim().isNotEmpty) {
+        setState(() {
+          _aiSearchKeyword = keyword.trim();
+          _searchCtrl.text = _aiSearchKeyword!;
+          _scannedImageFile = null;
+          _analysisFuture = null;
+        });
+        _loadProducts(search: _aiSearchKeyword);
+      } else {
+        setState(() {
+          _scannedImageFile = null;
+          _analysisFuture = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('AI không thể nhận dạng sản phẩm. Vui lòng thử lại ảnh rõ nét hơn!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error during AI image scanning: $e');
+      setState(() {
+        _scannedImageFile = null;
+        _analysisFuture = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Có lỗi xảy ra: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -74,11 +250,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
         ],
         child: Scaffold(
           backgroundColor: const Color(0xFFF5F5F5),
-          body: RefreshIndicator(
-            onRefresh: () async {
-              _loadProducts(search: _searchCtrl.text.trim());
-            },
-            child: BlocBuilder<ProductListBloc, ProductListState>(
+          body: Stack(
+            children: [
+              RefreshIndicator(
+                onRefresh: () async {
+                  _loadProducts(search: _searchCtrl.text.trim());
+                },
+                child: BlocBuilder<ProductListBloc, ProductListState>(
               builder: (context, state) {
                 return CustomScrollView(
                   slivers: [
@@ -94,13 +272,22 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     : 0;
                                 return _ShopHeader(
                                   controller: _searchCtrl,
-                                  onSearch: (value) => _loadProducts(search: value.trim()),
+                                  onSearch: (value) {
+                                    setState(() {
+                                      _aiSearchKeyword = null;
+                                    });
+                                    _loadProducts(search: value.trim());
+                                  },
                                   onClear: () {
+                                    setState(() {
+                                      _aiSearchKeyword = null;
+                                    });
                                     _searchCtrl.clear();
                                     _loadProducts();
                                   },
                                   cartCount: cartCount,
                                   onCartTap: () => context.push('/cart'),
+                                  onCameraTap: _onCameraTap,
                                 );
                               },
                             ),
@@ -121,15 +308,91 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       pinned: true,
                       delegate: _StickyTabBarDelegate(),
                     ),
+                    if (_aiSearchKeyword != null)
+                      SliverToBoxAdapter(
+                        child: Container(
+                          margin: const EdgeInsets.fromLTRB(AppSizes.md, AppSizes.sm, AppSizes.md, 0),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFEE4D2D), Color(0xFFFF7A00)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFEE4D2D).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              )
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'Outfit'),
+                                    children: [
+                                      const TextSpan(text: 'Kết quả quét ảnh '),
+                                      const TextSpan(
+                                        text: 'AI 🧠',
+                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      const TextSpan(text: ' cho: '),
+                                      TextSpan(
+                                        text: '"$_aiSearchKeyword"',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontStyle: FontStyle.italic,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                                onPressed: () {
+                                  setState(() {
+                                    _aiSearchKeyword = null;
+                                    _searchCtrl.clear();
+                                  });
+                                  _loadProducts();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     _buildContent(state),
                   ],
                 );
               },
             ),
           ),
-        ),
+          if (_scannedImageFile != null && _analysisFuture != null)
+            Positioned.fill(
+              child: AiScanningOverlay(
+                imageFile: _scannedImageFile!,
+                analysisFuture: _analysisFuture!,
+                onCancel: () {
+                  setState(() {
+                    _scannedImageFile = null;
+                    _analysisFuture = null;
+                  });
+                },
+              ),
+            ),
+        ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildContent(ProductListState state) {
@@ -198,6 +461,7 @@ class _ShopHeader extends StatelessWidget {
   final VoidCallback onClear;
   final int cartCount;
   final VoidCallback onCartTap;
+  final VoidCallback onCameraTap;
 
   const _ShopHeader({
     required this.controller,
@@ -205,6 +469,7 @@ class _ShopHeader extends StatelessWidget {
     required this.onClear,
     required this.cartCount,
     required this.onCartTap,
+    required this.onCameraTap,
   });
 
   @override
@@ -245,7 +510,10 @@ class _ShopHeader extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 22),
+                  GestureDetector(
+                    onTap: onCameraTap,
+                    child: const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 22),
+                  ),
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () => onSearch(controller.text),
@@ -504,11 +772,11 @@ class _CategoriesGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      {'icon': Icons.discount, 'label': 'Voucher Xtra', 'color': Colors.blue},
-      {'icon': Icons.local_shipping, 'label': 'Ưu đãi vận\nchuyển', 'color': Colors.teal},
-      {'icon': Icons.live_tv, 'label': 'Mua sắm qua\nLIVE', 'color': Colors.pink},
-      {'icon': Icons.storefront, 'label': 'TikTok Shop\nMall', 'color': Colors.black87},
-      {'icon': Icons.workspace_premium, 'label': 'TikTok Shop\nVIP', 'color': Colors.amber},
+      {'icon': Icons.local_offer_outlined, 'label': 'Voucher', 'color': const Color(0xFFEE4D2D)},
+      {'icon': Icons.receipt_long_outlined, 'label': 'Đơn hàng', 'color': Colors.blue},
+      {'icon': Icons.add_business_outlined, 'label': 'Đăng ký bán', 'color': Colors.teal},
+      {'icon': Icons.shopping_bag_outlined, 'label': 'Hàng Việt', 'color': Colors.orange},
+      {'icon': Icons.card_giftcard_outlined, 'label': 'Thưởng', 'color': Colors.pink},
     ];
 
     return Column(
@@ -518,24 +786,47 @@ class _CategoriesGrid extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: items.map((item) {
             return Expanded(
-              child: Column(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: (item['color'] as Color).withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 28),
+              child: InkWell(
+                onTap: () {
+                  final label = item['label'] as String;
+                  if (label == 'Voucher') {
+                    _showVouchersBottomSheet(context);
+                  } else if (label == 'Đơn hàng') {
+                    context.push('/orders');
+                  } else if (label == 'Đăng ký bán') {
+                    context.push('/register-seller');
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Tính năng "$label" đang được phát triển!'),
+                        backgroundColor: item['color'] as Color,
+                      ),
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: (item['color'] as Color).withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 28),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item['label'] as String,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11, color: Colors.black87, height: 1.2, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item['label'] as String,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: Colors.black87, height: 1.2),
-                  ),
-                ],
+                ),
               ),
             );
           }).toList(),

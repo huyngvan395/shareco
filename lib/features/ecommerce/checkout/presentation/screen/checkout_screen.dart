@@ -8,6 +8,7 @@ import '../../../../../core/constants/app_sizes.dart';
 import '../../../../../core/services/vietnam_regions_service.dart';
 import '../../../../../di/injector.dart';
 import '../../../address/domain/entities/shipping_address.dart';
+import '../../../address/domain/entities/shipping_address_draft.dart';
 import '../../../address/presentation/bloc/address_bloc.dart';
 import '../../../address/presentation/bloc/address_event.dart';
 import '../../../address/presentation/bloc/address_state.dart';
@@ -62,6 +63,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   int _selectedProvinceCode = -1;
   int _selectedDistrictCode = -1;
+  bool _saveAddressForNextTime = true;
 
   @override
   void initState() {
@@ -280,6 +282,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         addressLine: _addressCtrl.text.trim(),
         paymentMethod: _paymentMethod,
       );
+      
+      // Auto save manually typed address to address book if checkbox is active
+      if (_saveAddressForNextTime) {
+        _addressBloc.add(
+          AddressSaved(
+            ShippingAddressDraft(
+              fullName: _nameCtrl.text.trim(),
+              phone: _phoneCtrl.text.trim(),
+              province: _provinceCtrl.text.trim(),
+              district: _districtCtrl.text.trim(),
+              ward: _wardCtrl.text.trim(),
+              addressLine: _addressCtrl.text.trim(),
+              isDefault: true,
+            ),
+          ),
+        );
+      }
     }
 
     // Validate credit card info if Card is selected
@@ -409,6 +428,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             listener: (context, state) {
               if (state is AddressLoaded) {
                 _syncSelectedAddress(state.addresses);
+              } else if (state is AddressSaveSuccess) {
+                _addressBloc.add(const AddressListRequested());
               }
             },
           ),
@@ -503,6 +524,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onProvinceTap: _onProvinceTap,
                   onDistrictTap: _onDistrictTap,
                   onWardTap: _onWardTap,
+                  saveAddress: _saveAddressForNextTime,
+                  onSaveAddressChanged: (val) {
+                    setState(() {
+                      _saveAddressForNextTime = val ?? true;
+                    });
+                  },
                 ),
               ),
               const SizedBox(height: AppSizes.md),
@@ -595,6 +622,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onProvinceTap: _onProvinceTap,
                   onDistrictTap: _onDistrictTap,
                   onWardTap: _onWardTap,
+                  saveAddress: _saveAddressForNextTime,
+                  onSaveAddressChanged: (val) {
+                    setState(() {
+                      _saveAddressForNextTime = val ?? true;
+                    });
+                  },
                 ),
               ),
               const SizedBox(height: AppSizes.md),
@@ -1885,6 +1918,8 @@ class _ManualAddressForm extends StatelessWidget {
   final VoidCallback onProvinceTap;
   final VoidCallback onDistrictTap;
   final VoidCallback onWardTap;
+  final bool saveAddress;
+  final ValueChanged<bool?> onSaveAddressChanged;
 
   const _ManualAddressForm({
     required this.nameCtrl,
@@ -1900,6 +1935,8 @@ class _ManualAddressForm extends StatelessWidget {
     required this.onProvinceTap,
     required this.onDistrictTap,
     required this.onWardTap,
+    required this.saveAddress,
+    required this.onSaveAddressChanged,
   });
 
   @override
@@ -1943,6 +1980,31 @@ class _ManualAddressForm extends StatelessWidget {
         ),
         const SizedBox(height: AppSizes.sm),
         _CheckoutField(controller: addressCtrl, label: 'Địa chỉ cụ thể', validator: requiredValidator),
+        const SizedBox(height: AppSizes.md),
+        Row(
+          children: [
+            SizedBox(
+              height: 24,
+              width: 24,
+              child: Checkbox(
+                value: saveAddress,
+                onChanged: onSaveAddressChanged,
+                activeColor: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: AppSizes.sm),
+            const Expanded(
+              child: Text(
+                'Lưu địa chỉ này để dùng cho lần sau',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -2027,7 +2089,7 @@ class _VoucherCouponCard extends StatelessWidget {
       opacity: opacity,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        height: 96,
+        height: 104,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -2083,7 +2145,7 @@ class _VoucherCouponCard extends StatelessWidget {
               // Right part with details
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(
                     children: [
                       Expanded(

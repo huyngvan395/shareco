@@ -1114,6 +1114,12 @@ on public.product_categories
 for select
 using (true);
 
+create policy "product_categories_insert_auth"
+on public.product_categories
+for insert
+to authenticated
+with check (true);
+
 create policy "products_public_read"
 on public.products
 for select

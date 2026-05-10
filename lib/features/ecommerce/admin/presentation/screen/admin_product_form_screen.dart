@@ -1,8 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_layout.dart';
+import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_login_screen.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_bloc.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_event.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_state.dart';
@@ -24,6 +27,10 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _originalPriceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
   final _coverCtrl = TextEditingController();
+
+  XFile? _pickedCoverFile;
+  Uint8List? _coverBytes;
+  bool _isSaving = false;
 
   String? _selectedShopId;
   String? _selectedCategoryId;
@@ -54,6 +61,110 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     super.dispose();
   }
 
+  String _generateSlug(String text) {
+    var str = text.toLowerCase().trim();
+    const vietnamese = 'aáàảãạăắằẳẵặâấầẩẫậeéèẻẽẹêếềểễệiíìỉĩịoóòỏõọôốồổỗộơớờởỡợuúùủũụưứừửữựyýỳỷỹỵdđ';
+    const english =    'aaaaaaaaaaaaaaaaaeeeeeeeeeeeeiiiiiiioooooooooooooooooouuuuuuuuuuuuyyyyyydd';
+    for (int i = 0; i < vietnamese.length; i++) {
+      str = str.replaceAll(vietnamese[i], english[i]);
+    }
+    str = str.replaceAll(RegExp(r'[^a-z0-9\s-]'), '');
+    str = str.replaceAll(RegExp(r'\s+'), '-');
+    str = str.replaceAll(RegExp(r'-+'), '-');
+    return str;
+  }
+
+  Future<void> _showCreateCategoryDialog() async {
+    final catNameCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isAdding = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Tạo danh mục mới 🏷️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              content: Form(
+                key: formKey,
+                child: TextFormField(
+                  controller: catNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên danh mục *',
+                    hintText: 'Ví dụ: Mỹ phẩm, Làm đẹp...',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Vui lòng nhập tên danh mục' : null,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isAdding ? null : () => Navigator.pop(context),
+                  child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: isAdding
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          
+                          setDialogState(() {
+                            isAdding = true;
+                          });
+
+                          try {
+                            final name = catNameCtrl.text.trim();
+                            final slug = _generateSlug(name);
+
+                            final response = await Supabase.instance.client
+                                .from('product_categories')
+                                .insert({
+                                  'name': name,
+                                  'slug': slug,
+                                })
+                                .select('id, name')
+                                .single();
+
+                            final newCat = Map<String, dynamic>.from(response);
+                            
+                            setState(() {
+                              _categoriesList.add(newCat);
+                              _selectedCategoryId = newCat['id'];
+                            });
+
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Đã tạo danh mục "$name" thành công!'), backgroundColor: Colors.green),
+                            );
+                          } catch (e) {
+                            setDialogState(() {
+                              isAdding = false;
+                            });
+                            debugPrint('Error creating category: $e');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Lỗi khi tạo danh mục: $e'), backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6200EE),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isAdding
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Thêm'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _loadMetadata() async {
     try {
       final supabase = Supabase.instance.client;
@@ -66,6 +177,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       setState(() {
         _shopsList = List<Map<String, dynamic>>.from(shopsData);
         _categoriesList = List<Map<String, dynamic>>.from(catsData);
+        if (AdminSession.loggedInRole == 'shop') {
+          _selectedShopId = AdminSession.loggedInShopId;
+        }
         _isLoadingDropdowns = false;
       });
 
@@ -187,43 +301,84 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                                         // Brand & Category Dropdowns
                                         Row(
                                           children: [
-                                            Expanded(
-                                              child: DropdownButtonFormField<String?>(
-                                                value: _selectedShopId,
-                                                decoration: const InputDecoration(
-                                                  labelText: 'Nhãn hàng sở hữu *',
-                                                  border: OutlineInputBorder(),
+                                            if (AdminSession.loggedInRole == 'shop')
+                                              Expanded(
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.grey.shade50,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: Colors.black12),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Text('Nhãn hàng sở hữu', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        AdminSession.loggedInShopName ?? 'Gian hàng của tôi',
+                                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                                items: _shopsList.map((shop) {
-                                                  return DropdownMenuItem<String?>(
-                                                    value: shop['id'],
-                                                    child: Text(shop['shop_name'] ?? 'Shop'),
-                                                  );
-                                                }).toList(),
-                                                onChanged: _isEditMode
-                                                    ? null // Lock shop change during edit
-                                                    : (val) => setState(() => _selectedShopId = val),
-                                                validator: (v) => v == null ? 'Vui lòng chọn nhãn hàng sở hữu' : null,
+                                              )
+                                            else
+                                              Expanded(
+                                                child: DropdownButtonFormField<String?>(
+                                                  value: _selectedShopId,
+                                                  decoration: const InputDecoration(
+                                                    labelText: 'Nhãn hàng sở hữu *',
+                                                    border: OutlineInputBorder(),
+                                                  ),
+                                                  items: _shopsList.map((shop) {
+                                                    return DropdownMenuItem<String?>(
+                                                      value: shop['id'],
+                                                      child: Text(shop['shop_name'] ?? 'Shop'),
+                                                    );
+                                                  }).toList(),
+                                                  onChanged: (val) => setState(() => _selectedShopId = val),
+                                                  validator: (v) => v == null ? 'Vui lòng chọn nhãn hàng sở hữu' : null,
+                                                ),
                                               ),
-                                            ),
                                             const SizedBox(width: 16),
                                             Expanded(
-                                              child: DropdownButtonFormField<String?>(
-                                                value: _selectedCategoryId,
-                                                decoration: const InputDecoration(
-                                                  labelText: 'Danh mục sản phẩm *',
-                                                  border: OutlineInputBorder(),
-                                                ),
-                                                items: _categoriesList.map((cat) {
-                                                  return DropdownMenuItem<String?>(
-                                                    value: cat['id'],
-                                                    child: Text(cat['name'] ?? 'Danh mục'),
-                                                  );
-                                                }).toList(),
-                                                onChanged: _isEditMode
-                                                    ? null
-                                                    : (val) => setState(() => _selectedCategoryId = val),
-                                                validator: (v) => v == null ? 'Vui lòng chọn danh mục sản phẩm' : null,
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Expanded(
+                                                    child: DropdownButtonFormField<String?>(
+                                                      value: _selectedCategoryId,
+                                                      decoration: const InputDecoration(
+                                                        labelText: 'Danh mục sản phẩm *',
+                                                        border: OutlineInputBorder(),
+                                                      ),
+                                                      items: _categoriesList.map((cat) {
+                                                        return DropdownMenuItem<String?>(
+                                                          value: cat['id'],
+                                                          child: Text(cat['name'] ?? 'Danh mục'),
+                                                        );
+                                                      }).toList(),
+                                                      onChanged: (val) => setState(() => _selectedCategoryId = val),
+                                                      validator: (v) => v == null ? 'Vui lòng chọn danh mục sản phẩm' : null,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    height: 56,
+                                                    width: 56,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF6200EE).withOpacity(0.1),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(color: Colors.black12),
+                                                    ),
+                                                    child: IconButton(
+                                                      icon: const Icon(Icons.add, color: Color(0xFF6200EE)),
+                                                      tooltip: 'Tạo danh mục mới',
+                                                      onPressed: _showCreateCategoryDialog,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
@@ -281,14 +436,76 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                                           ],
                                         ),
                                         const SizedBox(height: 20),
-                                        // Cover Image URL
-                                        TextFormField(
-                                          controller: _coverCtrl,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Đường dẫn ảnh bìa đại diện (Cover Image URL)',
-                                            border: OutlineInputBorder(),
-                                            prefixIcon: Icon(Icons.image),
-                                            hintText: 'https://images.unsplash.com/...',
+                                        const Text(
+                                          'Ảnh bìa đại diện sản phẩm *',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        GestureDetector(
+                                          onTap: () async {
+                                            try {
+                                              final picker = ImagePicker();
+                                              final file = await picker.pickImage(source: ImageSource.gallery);
+                                              if (file != null) {
+                                                final bytes = await file.readAsBytes();
+                                                setState(() {
+                                                  _pickedCoverFile = file;
+                                                  _coverBytes = bytes;
+                                                });
+                                              }
+                                            } catch (e) {
+                                              debugPrint('Error picking cover: $e');
+                                            }
+                                          },
+                                          child: Container(
+                                            width: double.infinity,
+                                            height: 160,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(12),
+                                              color: Colors.grey[50],
+                                              border: Border.all(color: Colors.grey[300]!, width: 1.5),
+                                              image: _coverBytes != null
+                                                  ? DecorationImage(image: MemoryImage(_coverBytes!), fit: BoxFit.cover)
+                                                  : (_coverCtrl.text.isNotEmpty)
+                                                      ? DecorationImage(image: NetworkImage(_coverCtrl.text), fit: BoxFit.cover)
+                                                      : null,
+                                            ),
+                                            child: _coverBytes == null && _coverCtrl.text.isEmpty
+                                                ? Column(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      const Icon(Icons.cloud_upload_outlined, size: 38, color: Color(0xFF6200EE)),
+                                                      const SizedBox(height: 8),
+                                                      const Text(
+                                                        'Bấm để tải lên ảnh sản phẩm từ máy tính',
+                                                        style: TextStyle(color: Color(0xFF6200EE), fontSize: 13, fontWeight: FontWeight.bold),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        'Hỗ trợ JPG, PNG, WEBP',
+                                                        style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                                                      ),
+                                                    ],
+                                                  )
+                                                : Align(
+                                                    alignment: Alignment.bottomRight,
+                                                    child: Container(
+                                                      margin: const EdgeInsets.all(12),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black87,
+                                                        borderRadius: BorderRadius.circular(20),
+                                                      ),
+                                                      child: const Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(Icons.edit, color: Colors.white, size: 12),
+                                                          SizedBox(width: 4),
+                                                          Text('Thay đổi ảnh', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
                                           ),
                                         ),
                                         const SizedBox(height: 20),
@@ -417,59 +634,132 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                               ),
                               const SizedBox(width: 16),
                               ElevatedButton(
-                                onPressed: () {
-                                  if (!_formKey.currentState!.validate()) return;
+                                onPressed: _isSaving
+                                    ? null
+                                    : () async {
+                                        if (!_formKey.currentState!.validate()) return;
 
-                                  // Validate brand-owners & categories
-                                  if (_selectedShopId == null || _selectedCategoryId == null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Vui lòng điền đủ Nhãn hàng và Danh mục!'), backgroundColor: Colors.red),
-                                    );
-                                    return;
-                                  }
+                                        // Validate brand-owners & categories
+                                        if (_selectedShopId == null || _selectedCategoryId == null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Vui lòng điền đủ Nhãn hàng và Danh mục!'), backgroundColor: Colors.red),
+                                          );
+                                          return;
+                                        }
 
-                                  final title = _titleCtrl.text.trim();
-                                  final desc = _descCtrl.text.trim();
-                                  final price = double.parse(_priceCtrl.text.trim());
-                                  final originalPriceStr = _originalPriceCtrl.text.trim();
-                                  final double? originalPrice = originalPriceStr.isNotEmpty ? double.tryParse(originalPriceStr) : null;
-                                  final stock = int.parse(_stockCtrl.text.trim());
-                                  final cover = _coverCtrl.text.trim().isNotEmpty ? _coverCtrl.text.trim() : null;
+                                        // Ensure an image is selected when creating a new product
+                                        if (!_isEditMode && _pickedCoverFile == null) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('Vui lòng chọn ảnh bìa cho sản phẩm!'), backgroundColor: Colors.red),
+                                          );
+                                          return;
+                                        }
 
-                                  final bloc = context.read<AdminBloc>();
+                                        setState(() {
+                                          _isSaving = true;
+                                        });
 
-                                  if (_isEditMode) {
-                                    bloc.add(AdminUpdateProduct(
-                                      productId: widget.productId!,
-                                      title: title,
-                                      description: desc,
-                                      price: price,
-                                      originalPrice: originalPrice,
-                                      stock: stock,
-                                      coverPath: cover,
-                                    ));
-                                  } else {
-                                    bloc.add(AdminCreateProduct(
-                                      shopId: _selectedShopId!,
-                                      categoryId: _selectedCategoryId!,
-                                      title: title,
-                                      description: desc,
-                                      price: price,
-                                      originalPrice: originalPrice,
-                                      stock: stock,
-                                      coverPath: cover,
-                                      variants: _variants,
-                                    ));
-                                  }
+                                        // Show custom loading overlay dialog
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (dialogContext) => const PopScope(
+                                            canPop: false,
+                                            child: AlertDialog(
+                                              content: Row(
+                                                children: [
+                                                  CircularProgressIndicator(color: Color(0xFF6200EE)),
+                                                  SizedBox(width: 20),
+                                                  Expanded(
+                                                    child: Text(
+                                                      'Đang xử lý tải hình ảnh và lưu sản phẩm lên hệ thống...',
+                                                      style: TextStyle(fontWeight: FontWeight.w500),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(_isEditMode ? 'Cập nhật sản phẩm thành công!' : 'Đăng sản phẩm thành công!'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                  context.go('/products');
-                                },
+                                        try {
+                                          String? finalCoverUrl = _coverCtrl.text.trim().isNotEmpty ? _coverCtrl.text.trim() : null;
+
+                                          // Upload if there's a new picked cover
+                                          if (_pickedCoverFile != null && _coverBytes != null) {
+                                            final filename = _pickedCoverFile!.name;
+                                            String ext = 'jpg';
+                                            if (filename.contains('.')) {
+                                              final parsedExt = filename.split('.').last.toLowerCase();
+                                              if (parsedExt == 'png' || parsedExt == 'jpg' || parsedExt == 'jpeg' || parsedExt == 'gif' || parsedExt == 'webp') {
+                                                ext = parsedExt;
+                                              }
+                                            }
+                                            final path = 'products/prod_${DateTime.now().millisecondsSinceEpoch}.$ext';
+                                            await Supabase.instance.client.storage
+                                                .from('avatars')
+                                                .uploadBinary(path, _coverBytes!, fileOptions: FileOptions(contentType: 'image/$ext'));
+                                            finalCoverUrl = Supabase.instance.client.storage.from('avatars').getPublicUrl(path);
+                                          }
+
+                                          if (!context.mounted) return;
+
+                                          final title = _titleCtrl.text.trim();
+                                          final desc = _descCtrl.text.trim();
+                                          final price = double.parse(_priceCtrl.text.trim());
+                                          final originalPriceStr = _originalPriceCtrl.text.trim();
+                                          final double? originalPrice = originalPriceStr.isNotEmpty ? double.tryParse(originalPriceStr) : null;
+                                          final stock = int.parse(_stockCtrl.text.trim());
+
+                                          final bloc = context.read<AdminBloc>();
+
+                                          if (_isEditMode) {
+                                            bloc.add(AdminUpdateProduct(
+                                              productId: widget.productId!,
+                                              shopId: _selectedShopId!,
+                                              categoryId: _selectedCategoryId!,
+                                              title: title,
+                                              description: desc,
+                                              price: price,
+                                              originalPrice: originalPrice,
+                                              stock: stock,
+                                              coverPath: finalCoverUrl,
+                                            ));
+                                          } else {
+                                            bloc.add(AdminCreateProduct(
+                                              shopId: _selectedShopId!,
+                                              categoryId: _selectedCategoryId!,
+                                              title: title,
+                                              description: desc,
+                                              price: price,
+                                              originalPrice: originalPrice,
+                                              stock: stock,
+                                              coverPath: finalCoverUrl,
+                                              variants: _variants,
+                                            ));
+                                          }
+
+                                          // Dismiss the loading dialog
+                                          Navigator.of(context, rootNavigator: true).pop();
+
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(_isEditMode ? 'Cập nhật sản phẩm thành công!' : 'Đăng sản phẩm thành công!'),
+                                              backgroundColor: Colors.green,
+                                            ),
+                                          );
+                                          context.go('/products');
+                                        } catch (e) {
+                                          // Dismiss loading dialog if error occurs
+                                          Navigator.of(context, rootNavigator: true).pop();
+                                          setState(() {
+                                            _isSaving = false;
+                                          });
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('Lỗi tải ảnh/lưu sản phẩm: $e'), backgroundColor: Colors.red),
+                                          );
+                                        }
+                                      },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF6200EE),
                                   foregroundColor: Colors.white,

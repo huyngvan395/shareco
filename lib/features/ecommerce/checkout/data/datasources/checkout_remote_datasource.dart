@@ -112,6 +112,28 @@ class CheckoutRemoteDataSourceImpl implements CheckoutRemoteDataSource {
           }).toList(),
         );
 
+        // Deduct Variant and Product stock
+        for (final item in groupItems) {
+          if (item.variantId != null) {
+            final varRes = await SupabaseService.from('product_variants')
+                .select('stock_qty')
+                .eq('id', item.variantId!)
+                .single();
+            final currentVarStock = _asInt(varRes['stock_qty']);
+            await SupabaseService.from('product_variants')
+                .update({'stock_qty': (currentVarStock - item.qty).clamp(0, 999999)})
+                .eq('id', item.variantId!);
+          }
+          final prodRes = await SupabaseService.from('products')
+              .select('stock_total')
+              .eq('id', item.productId)
+              .single();
+          final currentProdStock = _asInt(prodRes['stock_total']);
+          await SupabaseService.from('products')
+              .update({'stock_total': (currentProdStock - item.qty).clamp(0, 999999)})
+              .eq('id', item.productId);
+        }
+
         orderIds.add(orderId);
         orderCodes.add(order['order_code'] as String);
         totalAmount += _asDouble(order['total_amount']);
@@ -226,6 +248,26 @@ class CheckoutRemoteDataSourceImpl implements CheckoutRemoteDataSource {
         'qty': qty,
         'line_total': lineTotal,
       });
+
+      // Deduct stock
+      if (variantId != null) {
+        final varRes = await SupabaseService.from('product_variants')
+            .select('stock_qty')
+            .eq('id', variantId)
+            .single();
+        final currentVarStock = _asInt(varRes['stock_qty']);
+        await SupabaseService.from('product_variants')
+            .update({'stock_qty': (currentVarStock - qty).clamp(0, 999999)})
+            .eq('id', variantId);
+      }
+      final prodRes = await SupabaseService.from('products')
+          .select('stock_total')
+          .eq('id', productId)
+          .single();
+      final currentProdStock = _asInt(prodRes['stock_total']);
+      await SupabaseService.from('products')
+          .update({'stock_total': (currentProdStock - qty).clamp(0, 999999)})
+          .eq('id', productId);
 
       return CheckoutResult(
         orderIds: [orderId],

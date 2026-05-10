@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_layout.dart';
+import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_login_screen.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_bloc.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_event.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_state.dart';
@@ -18,11 +20,20 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
   String? _selectedShopId;
 
   @override
+  void initState() {
+    super.initState();
+    // Default filter for Brand/Shop Owner to their own shop
+    if (AdminSession.loggedInRole == 'shop') {
+      _selectedShopId = AdminSession.loggedInShopId;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => AdminBloc()
         ..add(AdminFetchShops())
-        ..add(AdminFetchProducts()),
+        ..add(AdminFetchProducts(shopId: _selectedShopId)),
       child: BlocConsumer<AdminBloc, AdminState>(
         listener: (context, state) {
           if (state.status == AdminStatus.failure && state.errorMessage != null) {
@@ -32,8 +43,10 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           }
         },
         builder: (context, state) {
+          final isPlatformAdmin = AdminSession.loggedInRole == 'admin';
+
           return AdminLayout(
-            title: 'Quản lý Hàng hóa & Sản phẩm 📦',
+            title: isPlatformAdmin ? 'Quản lý Hàng hóa & Sản phẩm toàn sàn 📦' : 'Kho hàng của tôi 📦',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -41,48 +54,55 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Brand Filter Dropdown
-                    Row(
-                      children: [
-                        const Text(
-                          'Lọc theo Nhãn hàng: ',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 13),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.black12),
+                    // Brand Filter Dropdown (Only visible to Platform Super Admin)
+                    if (isPlatformAdmin)
+                      Row(
+                        children: [
+                          const Text(
+                            'Lọc theo Nhãn hàng: ',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 13),
                           ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String?>(
-                              value: _selectedShopId,
-                              hint: const Text('Tất cả nhãn hàng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                              onChanged: (val) {
-                                setState(() {
-                                  _selectedShopId = val;
-                                });
-                                context.read<AdminBloc>().add(AdminFetchProducts(shopId: val));
-                              },
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text('Tất cả nhãn hàng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                                ),
-                                ...state.shops.map((shop) {
-                                  return DropdownMenuItem<String?>(
-                                    value: shop['id'],
-                                    child: Text(shop['shop_name'] ?? 'Shop', style: const TextStyle(fontSize: 13)),
-                                  );
-                                }),
-                              ],
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.black12),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String?>(
+                                value: _selectedShopId,
+                                hint: const Text('Tất cả nhãn hàng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedShopId = val;
+                                  });
+                                  context.read<AdminBloc>().add(AdminFetchProducts(shopId: val));
+                                },
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text('Tất cả nhãn hàng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                  ),
+                                  ...state.shops.map((shop) {
+                                    return DropdownMenuItem<String?>(
+                                      value: shop['id'],
+                                      child: Text(shop['shop_name'] ?? 'Shop', style: const TextStyle(fontSize: 13)),
+                                    );
+                                  }),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      )
+                    else
+                      // Friendly brand identity message
+                      Text(
+                        'Gian hàng: ${AdminSession.loggedInShopName ?? "Đối tác Shareco"}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+                      ),
                     // Add Product button
                     ElevatedButton.icon(
                       onPressed: () {
@@ -244,22 +264,61 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           // Status
           Expanded(
             flex: 1,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: p.isActive ? Colors.green.shade50 : Colors.red.shade50,
+            child: Tooltip(
+              message: p.isActive ? 'Bấm để ngừng bán' : 'Bấm để mở bán lại',
+              child: InkWell(
+                onTap: () async {
+                  try {
+                    final nextStatus = p.isActive ? 'inactive' : 'active';
+                    
+                    // 1. Update product table
+                    await Supabase.instance.client
+                        .from('products')
+                        .update({'status': nextStatus})
+                        .eq('id', p.id);
+                        
+                    // 2. Also update status of the variants in product_variants table so they are synchronized
+                    await Supabase.instance.client
+                        .from('product_variants')
+                        .update({'status': nextStatus})
+                        .eq('product_id', p.id);
+                    
+                    if (!mounted) return;
+                    context.read<AdminBloc>().add(AdminFetchProducts(shopId: _selectedShopId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(p.isActive 
+                          ? 'Đã chuyển trạng thái sản phẩm sang [Ẩn/Ngừng bán] 🛑' 
+                          : 'Đã mở bán lại sản phẩm thành công! 🎉'
+                        ),
+                        backgroundColor: p.isActive ? Colors.orange : Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Lỗi cập nhật trạng thái: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                },
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: p.isActive ? Colors.green.shade200 : Colors.red.shade200,
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                p.isActive ? 'Đang bán' : 'Ẩn/Ngừng',
-                style: TextStyle(
-                  color: p.isActive ? Colors.green.shade700 : Colors.red.shade700,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: p.isActive ? Colors.green.shade50 : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: p.isActive ? Colors.green.shade200 : Colors.red.shade200,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    p.isActive ? 'Đang bán' : 'Ẩn/Ngừng',
+                    style: TextStyle(
+                      color: p.isActive ? Colors.green.shade700 : Colors.red.shade700,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ),

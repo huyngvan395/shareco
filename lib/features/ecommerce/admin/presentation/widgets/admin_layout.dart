@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+    import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shareco/routes/admin_router.dart';
+import '../screen/admin_login_screen.dart';
 
 class AdminLayout extends StatelessWidget {
   final Widget child;
@@ -53,10 +54,10 @@ class AdminLayout extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'SHARECO',
                             style: TextStyle(
                               color: Colors.white,
@@ -66,8 +67,8 @@ class AdminLayout extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'Super Admin 👑',
-                            style: TextStyle(
+                            AdminSession.loggedInRole == 'admin' ? 'Super Admin 👑' : 'Nhãn Hàng 🏷️',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -86,29 +87,47 @@ class AdminLayout extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
-                      _buildMenuItem(
-                        context: context,
-                        icon: Icons.storefront_rounded,
-                        label: 'Nhãn hàng / Shops',
-                        route: AdminRouter.shops,
-                        isActive: currentRoute == AdminRouter.shops,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildMenuItem(
-                        context: context,
-                        icon: Icons.inventory_2_rounded,
-                        label: 'Sản phẩm',
-                        route: AdminRouter.products,
-                        isActive: currentRoute.startsWith(AdminRouter.products),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildMenuItem(
-                        context: context,
-                        icon: Icons.receipt_long_rounded,
-                        label: 'Đơn hàng toàn hệ thống',
-                        route: AdminRouter.orders,
-                        isActive: currentRoute == AdminRouter.orders,
-                      ),
+                      if (AdminSession.loggedInRole == 'admin') ...[
+                        _buildMenuItem(
+                          context: context,
+                          icon: Icons.storefront_rounded,
+                          label: 'Nhãn hàng / Shops',
+                          route: AdminRouter.shops,
+                          isActive: currentRoute == AdminRouter.shops,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildMenuItem(
+                          context: context,
+                          icon: Icons.inventory_2_rounded,
+                          label: 'Tất cả sản phẩm',
+                          route: AdminRouter.products,
+                          isActive: currentRoute.startsWith(AdminRouter.products),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildMenuItem(
+                          context: context,
+                          icon: Icons.receipt_long_rounded,
+                          label: 'Tất cả đơn hàng',
+                          route: AdminRouter.orders,
+                          isActive: currentRoute == AdminRouter.orders,
+                        ),
+                      ] else ...[
+                        _buildMenuItem(
+                          context: context,
+                          icon: Icons.inventory_2_rounded,
+                          label: 'Sản phẩm của tôi',
+                          route: AdminRouter.products,
+                          isActive: currentRoute.startsWith(AdminRouter.products),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildMenuItem(
+                          context: context,
+                          icon: Icons.receipt_long_rounded,
+                          label: 'Đơn hàng của tôi',
+                          route: AdminRouter.orders,
+                          isActive: currentRoute == AdminRouter.orders,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -118,29 +137,30 @@ class AdminLayout extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
-                      const CircleAvatar(
-                        backgroundColor: Color(0xFF6200EE),
+                      CircleAvatar(
+                        backgroundColor: const Color(0xFF6200EE),
                         child: Text(
-                          'A',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          (AdminSession.loggedInShopName ?? 'A')[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Platform Admin',
-                              style: TextStyle(
+                              AdminSession.loggedInShopName ?? 'Platform Admin',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                             Text(
-                              'admin@shareco.vn',
-                              style: TextStyle(
+                              AdminSession.loggedInEmail ?? 'admin@shareco.vn',
+                              style: const TextStyle(
                                 color: Colors.white60,
                                 fontSize: 11,
                               ),
@@ -152,10 +172,16 @@ class AdminLayout extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.logout, color: Colors.white54, size: 18),
                         onPressed: () {
-                          // Standard mock logout alert
+                          // Clear session and go to login
+                          AdminSession.loggedInRole = null;
+                          AdminSession.loggedInShopId = null;
+                          AdminSession.loggedInShopName = null;
+                          AdminSession.loggedInEmail = null;
+                          
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Hẹn gặp lại Super Admin!')),
+                            const SnackBar(content: Text('Đã đăng xuất hệ thống!')),
                           );
+                          context.go(AdminRouter.login);
                         },
                       ),
                     ],

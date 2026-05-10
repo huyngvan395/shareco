@@ -18,6 +18,7 @@ import 'package:shareco/features/ecommerce/product/presentation/screen/product_d
 import 'package:shareco/features/ecommerce/product/presentation/screen/product_list_screen.dart';
 import 'package:shareco/features/ecommerce/review/presentation/screen/review_form_screen.dart';
 import 'package:shareco/features/ecommerce/shop/presentation/screen/shop_profile_screen.dart';
+import 'package:shareco/features/ecommerce/shop/presentation/screen/seller_registration_screen.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_bloc.dart';
 import 'package:shareco/features/feed/presentation/screen/feed_screen.dart';
 import 'package:shareco/features/profile/presentation/screen/profile_screen.dart';
@@ -47,6 +48,7 @@ class Routes {
   static const addressEdit = "/addresses/:id/edit";
   static const shopProfile = "/shop/:id";
   static const reviewForm = "/review/new";
+  static const registerSeller = "/register-seller";
 }
 
 class AppRouter {
@@ -102,6 +104,10 @@ class AppRouter {
         path: Routes.shopProfile,
         builder: (_, state) =>
             ShopProfileScreen(shopId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: Routes.registerSeller,
+        builder: (_, _) => const SellerRegistrationScreen(),
       ),
       GoRoute(
         path: Routes.reviewForm,

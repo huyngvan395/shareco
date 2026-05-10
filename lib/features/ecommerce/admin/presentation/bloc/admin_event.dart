@@ -81,6 +81,8 @@ class AdminCreateProduct extends AdminEvent {
 
 class AdminUpdateProduct extends AdminEvent {
   final String productId;
+  final String shopId;
+  final String categoryId;
   final String title;
   final String description;
   final double price;
@@ -90,6 +92,8 @@ class AdminUpdateProduct extends AdminEvent {
 
   const AdminUpdateProduct({
     required this.productId,
+    required this.shopId,
+    required this.categoryId,
     required this.title,
     required this.description,
     required this.price,
@@ -99,7 +103,7 @@ class AdminUpdateProduct extends AdminEvent {
   });
 
   @override
-  List<Object?> get props => [productId, title, description, price, originalPrice, stock, coverPath];
+  List<Object?> get props => [productId, shopId, categoryId, title, description, price, originalPrice, stock, coverPath];
 }
 
 class AdminDeleteProduct extends AdminEvent {
@@ -110,7 +114,13 @@ class AdminDeleteProduct extends AdminEvent {
   List<Object?> get props => [productId];
 }
 
-class AdminFetchOrders extends AdminEvent {}
+class AdminFetchOrders extends AdminEvent {
+  final String? shopId;
+  const AdminFetchOrders({this.shopId});
+
+  @override
+  List<Object?> get props => [shopId];
+}
 
 class AdminUpdateOrderStatus extends AdminEvent {
   final String orderId;

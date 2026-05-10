@@ -3,11 +3,11 @@
 
 -- 1. Add 'original_price' column to 'products' table
 alter table public.products 
-add column if_not_exists original_price numeric(15,2) default null;
+add column if not exists original_price numeric(15,2) default null;
 
 -- 2. Add 'original_price' column to 'product_variants' table
 alter table public.product_variants 
-add column if_not_exists original_price numeric(15,2) default null;
+add column if not exists original_price numeric(15,2) default null;
 
 -- 3. Seed some sample discount prices for current seed products
 -- Apple: Samsung Galaxy Buds FE (ID: 44444444-4444-4444-8444-444444444444)

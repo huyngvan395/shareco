@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_layout.dart';
+import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_login_screen.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_bloc.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_event.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_state.dart';
@@ -15,23 +17,44 @@ class AdminOrdersScreen extends StatefulWidget {
 
 class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late AdminBloc _adminBloc;
+  RealtimeChannel? _ordersSubscription;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 7, vsync: this);
+
+    final shopId = AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+    _adminBloc = AdminBloc()..add(AdminFetchOrders(shopId: shopId));
+
+    _ordersSubscription = Supabase.instance.client
+        .channel('public:orders')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          callback: (payload) {
+            _adminBloc.add(AdminFetchOrders(shopId: shopId));
+          },
+        )
+        .subscribe();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    if (_ordersSubscription != null) {
+      Supabase.instance.client.removeChannel(_ordersSubscription!);
+    }
+    _adminBloc.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => AdminBloc()..add(AdminFetchOrders()),
+    return BlocProvider.value(
+      value: _adminBloc,
       child: BlocConsumer<AdminBloc, AdminState>(
         listener: (context, state) {
           if (state.status == AdminStatus.failure && state.errorMessage != null) {
@@ -41,8 +64,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
           }
         },
         builder: (context, state) {
+          final isPlatformAdmin = AdminSession.loggedInRole == 'admin';
           return AdminLayout(
-            title: 'Quản lý Đơn hàng Toàn hệ thống 🧾',
+            title: isPlatformAdmin ? 'Quản lý Đơn hàng Toàn hệ thống 🧾' : 'Quản lý Đơn hàng bán của tôi 🧾',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -59,7 +83,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
                     tabs: const [
                       Tab(text: 'TẤT CẢ'),
                       Tab(text: 'CHỜ XỬ LÝ (PENDING)'),
-                      Tab(text: 'ĐANG ĐÓNG GÓI (PROCESSING)'),
+                      Tab(text: 'ĐANG ĐÓNG GÓI (PACKED)'),
                       Tab(text: 'ĐANG GIAO (SHIPPING)'),
                       Tab(text: 'ĐÃ HOÀN THÀNH (COMPLETED)'),
                       Tab(text: 'HOÀN TIỀN (REFUNDED)'),
@@ -77,7 +101,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
                           children: [
                             _buildOrdersList(context, state.orders, null),
                             _buildOrdersList(context, state.orders, 'pending'),
-                            _buildOrdersList(context, state.orders, 'processing'),
+                            _buildOrdersList(context, state.orders, 'packed'),
                             _buildOrdersList(context, state.orders, 'shipping'),
                             _buildOrdersList(context, state.orders, 'completed'),
                             _buildOrdersList(context, state.orders, 'refunded'),
@@ -290,7 +314,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
     String label = 'Đang chờ xử lý';
 
     switch (status.toLowerCase()) {
-      case 'processing':
+      case 'packed':
         bg = Colors.orange.shade50;
         border = Colors.orange.shade200;
         text = Colors.orange.shade700;
@@ -345,7 +369,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
         children: [
           ElevatedButton(
             onPressed: () {
-              context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'processing'));
+              context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'packed'));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Đơn hàng #${o.orderCode} đã được xác nhận và đang đóng gói'), backgroundColor: Colors.orange),
               );
@@ -376,7 +400,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTicker
       );
     }
 
-    if (status == 'processing') {
+    if (status == 'packed') {
       return ElevatedButton(
         onPressed: () {
           context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'shipping'));
