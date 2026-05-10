@@ -1274,7 +1274,7 @@ class _AudioBubbleState extends State<_AudioBubble> {
   }
 
   Future<void> _init() async {
-    if (widget.isPending || widget.audioUrl.isEmpty) return;
+    if (widget.audioUrl.isEmpty) return;
 
     try {
       if (widget.audioUrl.startsWith('/')) {
