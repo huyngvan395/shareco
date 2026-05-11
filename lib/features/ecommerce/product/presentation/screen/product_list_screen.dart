@@ -496,7 +496,7 @@ class _ShopHeader extends StatelessWidget {
                       controller: controller,
                       onSubmitted: onSearch,
                       decoration: InputDecoration(
-                        hintText: 'ốp redmi note 11',
+                        hintText: 'Nhập sản phẩm bạn muốn tìm kiếm',
                         hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
                         border: InputBorder.none,
                         isDense: true,
