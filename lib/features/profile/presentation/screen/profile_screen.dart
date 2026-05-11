@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shareco/core/notifier/video_posted_notifier.dart';
 import 'package:shareco/features/chat/domain/usecases/chat_usecases.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_bloc.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_event.dart';
@@ -54,6 +55,12 @@ class _ProfileViewState extends State<_ProfileView>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    VideoPostedNotifier.instance.addListener(_onVideoPosted);
+  }
+
+  void _onVideoPosted() {
+    if (!mounted) return;
+    context.read<ProfileBloc>().add(const ProfileVideosRefreshRequested());
   }
 
   @override

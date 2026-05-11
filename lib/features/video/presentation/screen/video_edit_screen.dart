@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shareco/core/notifier/video_posted_notifier.dart';
 import 'package:shareco/features/video/presentation/bloc/create_video_event.dart';
 import 'package:shareco/features/video/presentation/bloc/create_video_state.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -14,11 +15,13 @@ import '../bloc/create_video_bloc.dart';
 class VideoEditScreen extends StatefulWidget {
   final String localVideoPath;
   final String? thumbnailPath;
+  final VoidCallback? onVideoPosted;
 
   const VideoEditScreen({
     super.key,
     required this.localVideoPath,
     this.thumbnailPath,
+    this.onVideoPosted,
   });
 
   @override
@@ -52,6 +55,8 @@ class _VideoEditScreenState extends State<VideoEditScreen>
     return BlocListener<CreateVideoBloc, CreateVideoState>(
       listener: (ctx, state) {
         if (state is CreateVideoSuccess) {
+          VideoPostedNotifier.instance.notify();
+          widget.onVideoPosted?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Đăng video thành công! '),

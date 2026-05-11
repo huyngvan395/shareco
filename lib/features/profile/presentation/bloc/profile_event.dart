@@ -32,3 +32,7 @@ class ProfileAvatarUpdateRequested extends ProfileEvent {
   final String filePath;
   const ProfileAvatarUpdateRequested(this.filePath);
 }
+
+class ProfileVideosRefreshRequested extends ProfileEvent {
+  const ProfileVideosRefreshRequested();
+}

@@ -19,6 +19,7 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     on<ProfileVideosLoadMoreRequested>(_onLoadMoreVideos);
     on<ProfileUpdateRequested>(_onUpdate);
     on<ProfileAvatarUpdateRequested>(_onUpdateAvatar);
+    on<ProfileVideosRefreshRequested>(_onRefreshVideos);
   }
 
   Future<void> _onLoad(ProfileLoadRequested event, Emitter<ProfileState> emit) async {
@@ -107,6 +108,24 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     } catch (_) {
       emit(current.copyWith(isUploadingAvatar: false));
     }
+  }
+
+  Future<void> _onRefreshVideos(
+      ProfileVideosRefreshRequested _,
+      Emitter<ProfileState> emit,
+      ) async {
+    final current = state;
+    if (current is! ProfileLoaded) return;
+
+    final result = await getUserVideos(userId: current.profile.id, page: 0);
+    result.fold(
+          (_) {}, // giữ nguyên nếu lỗi
+          (p) => emit(current.copyWith(
+        videos: p.items,
+        videoPage: 0,
+        hasReachedMax: !p.hasMore,
+      )),
+    );
   }
 }
 
