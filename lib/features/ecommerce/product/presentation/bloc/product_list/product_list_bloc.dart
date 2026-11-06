@@ -22,6 +22,7 @@ class ProductListBloc extends Bloc<ProductListEvent, ProductListState> {
       search: event.search,
       categoryId: event.categoryId,
       brand: event.brand,
+      shopId: event.shopId,
     );
     result.fold(
       (failure) => emit(ProductListFailure(failure.message)),
@@ -29,6 +30,8 @@ class ProductListBloc extends Bloc<ProductListEvent, ProductListState> {
         ProductListLoaded(
           products: products,
           search: event.search,
+          selectedBrand: event.brand,
+          selectedShopId: event.shopId,
         ),
       ),
     );

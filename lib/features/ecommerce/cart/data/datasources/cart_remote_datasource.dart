@@ -27,6 +27,9 @@ class CartRemoteDataSourceImpl implements CartRemoteDataSource {
       'products(id,shop_id,title,cover_path,currency,stock_total,shops(shop_name)),'
       'product_variants(id,sku,variant_name,price,stock_qty,status))';
 
+  String? _cachedUserId;
+  String? _cachedCartId;
+
   @override
   Future<CartModel> getCart() async {
     final cart = await _getOrCreateCart();
@@ -43,11 +46,15 @@ class CartRemoteDataSourceImpl implements CartRemoteDataSource {
       throw const ServerException('Quantity must be greater than zero');
     }
 
-    final cart = await _getOrCreateCart();
-    final priceInfo = await _resolvePriceAndStock(
-      productId: productId,
-      variantId: variantId,
-    );
+    final results = await Future.wait([
+      _getOrCreateCart(),
+      _resolvePriceAndStock(
+        productId: productId,
+        variantId: variantId,
+      ),
+    ]);
+    final cart = results[0] as _CartRef;
+    final priceInfo = results[1] as _PriceInfo;
 
     final existingItems = await SupabaseService.from('cart_items')
         .select('id,variant_id,qty')
@@ -136,14 +143,21 @@ class CartRemoteDataSourceImpl implements CartRemoteDataSource {
       throw const AuthException('Please sign in to use cart');
     }
 
+    if (_cachedUserId == userId && _cachedCartId != null) {
+      return _CartRef(id: _cachedCartId!, userId: userId);
+    }
+
     final existing = await SupabaseService.from('carts')
         .select('id,user_id')
         .eq('user_id', userId)
         .limit(1);
     final rows = (existing as List).whereType<Map<String, dynamic>>().toList();
     if (rows.isNotEmpty) {
+      final id = rows.first['id'] as String;
+      _cachedUserId = userId;
+      _cachedCartId = id;
       return _CartRef(
-        id: rows.first['id'] as String,
+        id: id,
         userId: rows.first['user_id'] as String,
       );
     }
@@ -153,8 +167,11 @@ class CartRemoteDataSourceImpl implements CartRemoteDataSource {
         .select('id,user_id')
         .single();
 
+    final id = created['id'] as String;
+    _cachedUserId = userId;
+    _cachedCartId = id;
     return _CartRef(
-      id: created['id'] as String,
+      id: id,
       userId: created['user_id'] as String,
     );
   }

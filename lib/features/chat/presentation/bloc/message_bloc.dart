@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shareco/core/notifier/auth_notifier.dart';
 import 'package:shareco/features/chat/domain/entities/chat_entities.dart';
 import 'package:shareco/features/chat/domain/usecases/chat_usecases.dart';
 import 'package:shareco/features/chat/domain/usecases/upload_media_usecase.dart';
@@ -167,14 +166,18 @@ class MessageBloc extends Bloc<MessageEvent, MessageState> {
         }
       },
       (confirmed) {
-        // Replace temp message with confirmed one
+        // Replace temp message with confirmed one (guard against duplicate if realtime arrived first)
         final c = state;
         if (c is MessageLoaded) {
+          final alreadyExists = c.messages.any((m) => m.id == confirmed.id);
+          final updated = alreadyExists
+              ? c.messages.where((m) => m.id != tempId).toList()
+              : c.messages
+                    .map((m) => m.id == tempId ? confirmed : m)
+                    .toList();
           emit(
             c.copyWith(
-              messages: c.messages
-                  .map((m) => m.id == tempId ? confirmed : m)
-                  .toList(),
+              messages: updated,
               isSending: false,
             ),
           );
@@ -365,13 +368,15 @@ class MessageBloc extends Bloc<MessageEvent, MessageState> {
                     .toList(),
               ),
             ),
-            (confirmed) => emit(
-              c.copyWith(
-                messages: c.messages
-                    .map((m) => m.id == tempId ? confirmed : m)
-                    .toList(),
-              ),
-            ),
+            (confirmed) {
+              final alreadyExists = c.messages.any((m) => m.id == confirmed.id);
+              final updated = alreadyExists
+                  ? c.messages.where((m) => m.id != tempId).toList()
+                  : c.messages
+                        .map((m) => m.id == tempId ? confirmed : m)
+                        .toList();
+              emit(c.copyWith(messages: updated));
+            },
           );
         }
       },
@@ -444,11 +449,13 @@ class MessageBloc extends Bloc<MessageEvent, MessageState> {
 
     sendResult.fold(
           (_) => markFailed(),
-          (confirmed) => emit(
-        c.copyWith(
-          messages: c.messages.map((m) => m.id == tempId ? confirmed : m).toList(),
-        ),
-      ),
+          (confirmed) {
+        final alreadyExists = c.messages.any((m) => m.id == confirmed.id);
+        final updated = alreadyExists
+            ? c.messages.where((m) => m.id != tempId).toList()
+            : c.messages.map((m) => m.id == tempId ? confirmed : m).toList();
+        emit(c.copyWith(messages: updated));
+      },
     );
   }
 

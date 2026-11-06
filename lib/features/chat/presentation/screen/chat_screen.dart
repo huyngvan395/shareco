@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shareco/core/services/supabase/presence_service.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_event.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_state.dart';
-import 'package:shareco/features/chat/presentation/screen/message_screen.dart';
 import 'package:shareco/routes/app_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/supabase/index.dart';
@@ -54,11 +53,13 @@ class _ChatViewState extends State<_ChatView> {
         if (state is ConversationNavigateTo) {
           context
               .push(Routes.messages, extra: state.conversation)
-              .then(
-                (_) => ctx.read<ConversationBloc>().add(
-                  const ConversationRefreshRequested(),
-                ),
-              );
+              .then((_) {
+                if (ctx.mounted) {
+                  ctx.read<ConversationBloc>().add(
+                    const ConversationRefreshRequested(),
+                  );
+                }
+              });
         }
       },
       child: Scaffold(
@@ -315,15 +316,17 @@ class _ChatViewState extends State<_ChatView> {
             username: other?.username ?? '',
             lastMessage: conv.lastMessage ?? 'Bắt đầu cuộc hội thoại',
             time: _timeAgo(conv.lastMessageAt ?? conv.updatedAt),
-            userId: other!.id,
+            userId: other?.id ?? '',
             hasUnread: conv.hasUnread,
             onTap: () => context
                 .push(Routes.messages, extra: conv)
-                .then(
-                  (_) => ctx.read<ConversationBloc>().add(
-                    const ConversationRefreshRequested(),
-                  ),
-                ),
+                .then((_) {
+                  if (ctx.mounted) {
+                    ctx.read<ConversationBloc>().add(
+                      const ConversationRefreshRequested(),
+                    );
+                  }
+                }),
           );
         },
       ),

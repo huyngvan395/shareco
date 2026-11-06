@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shareco/core/notifier/video_posted_notifier.dart';
 import 'package:shareco/features/chat/domain/usecases/chat_usecases.dart';
-import 'package:shareco/features/chat/presentation/bloc/conversation_bloc.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_event.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_state.dart';
 import 'package:shareco/features/profile/presentation/screen/profile_feed_screen.dart';
@@ -65,6 +64,7 @@ class _ProfileViewState extends State<_ProfileView>
 
   @override
   void dispose() {
+    VideoPostedNotifier.instance.removeListener(_onVideoPosted);
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -88,15 +88,8 @@ class _ProfileViewState extends State<_ProfileView>
     BuildContext context,
     String otherUserId,
   ) async {
-    // Tạo hoặc lấy conversation, rồi navigate
-    final convBloc = ConversationBloc(
-      getConversations: sl(),
-      getOrCreateConversation: sl(),
-      searchUsers: sl(),
-    );
-
     final result = await sl<GetOrCreateConversationUseCase>()(otherUserId);
-    convBloc.close();
+    if (!context.mounted) return;
 
     result.fold(
       (failure) {

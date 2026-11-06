@@ -17,6 +17,7 @@ class ProductRepositoryImpl implements ProductRepository {
     String? search,
     String? categoryId,
     String? brand,
+    String? shopId,
   }) async {
     try {
       final products = await remoteDataSource.getProducts(
@@ -24,6 +25,7 @@ class ProductRepositoryImpl implements ProductRepository {
         search: search,
         categoryId: categoryId,
         brand: brand,
+        shopId: shopId,
       );
       return Right(products.map((item) => item.toEntity()).toList());
     } on ServerException catch (e) {

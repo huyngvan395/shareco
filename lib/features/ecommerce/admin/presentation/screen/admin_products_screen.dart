@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_layout.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_login_screen.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_bloc.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_event.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_state.dart';
-import 'package:shareco/features/ecommerce/product/domain/entities/product.dart';
+import 'package:shareco/routes/admin_router.dart';
+import '../bloc/admin_bloc.dart';
+import '../bloc/admin_event.dart';
+import '../bloc/admin_state.dart';
+import '../widgets/admin_layout.dart';
+import '../widgets/admin_ui_helpers.dart';
+import 'admin_login_screen.dart';
 
 class AdminProductsScreen extends StatefulWidget {
   const AdminProductsScreen({super.key});
@@ -17,366 +17,606 @@ class AdminProductsScreen extends StatefulWidget {
 }
 
 class _AdminProductsScreenState extends State<AdminProductsScreen> {
-  String? _selectedShopId;
-
-  @override
-  void initState() {
-    super.initState();
-    // Default filter for Brand/Shop Owner to their own shop
-    if (AdminSession.loggedInRole == 'shop') {
-      _selectedShopId = AdminSession.loggedInShopId;
-    }
-  }
+  String _searchQuery = '';
+  String _filterStatus = 'all'; // 'all', 'active', 'low_stock', 'inactive'
 
   @override
   Widget build(BuildContext context) {
+    final currentShopId =
+        AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+
     return BlocProvider(
-      create: (context) => AdminBloc()
+      create: (_) => AdminBloc()
         ..add(AdminFetchShops())
-        ..add(AdminFetchProducts(shopId: _selectedShopId)),
+        ..add(AdminFetchProducts(shopId: currentShopId)),
       child: BlocConsumer<AdminBloc, AdminState>(
         listener: (context, state) {
           if (state.status == AdminStatus.failure && state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.errorMessage!), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(state.errorMessage!),
+                backgroundColor: AdminPalette.danger,
+              ),
             );
           }
         },
         builder: (context, state) {
-          final isPlatformAdmin = AdminSession.loggedInRole == 'admin';
+          final allProducts = state.products;
+          final activeCount =
+              allProducts.where((p) => p.status == 'active').length;
+          final lowStockCount =
+              allProducts.where((p) => p.stockTotal < 10).length;
+
+          final filteredProducts = allProducts.where((p) {
+            final q = _searchQuery.trim().toLowerCase();
+            final matchesSearch = q.isEmpty ||
+                p.title.toLowerCase().contains(q) ||
+                (p.brand ?? '').toLowerCase().contains(q) ||
+                (p.shopName ?? '').toLowerCase().contains(q);
+
+            if (!matchesSearch) return false;
+
+            if (_filterStatus == 'active') return p.status == 'active';
+            if (_filterStatus == 'low_stock') return p.stockTotal < 10;
+            if (_filterStatus == 'inactive') return p.status != 'active';
+            return true;
+          }).toList();
 
           return AdminLayout(
-            title: isPlatformAdmin ? 'Quản lý Hàng hóa & Sản phẩm toàn sàn 📦' : 'Kho hàng của tôi 📦',
+            title: AdminSession.loggedInRole == 'shop'
+                ? 'Quản Lý Sản Phẩm Gian Hàng'
+                : 'Quản Lý Tất Cả Sản Phẩm Trên Sàn',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Filter & Action bar
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // KPI Summary Row
+              Row(
+                children: [
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Tổng Sản Phẩm',
+                      value: '${allProducts.length}',
+                      subtitle: AdminSession.loggedInRole == 'shop'
+                          ? 'Thuộc gian hàng của bạn'
+                          : 'Toàn bộ sản phẩm trên sàn',
+                      icon: Icons.inventory_2_rounded,
+                      color: AdminPalette.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Đang Mở Bán',
+                      value: '$activeCount',
+                      subtitle: 'Hiển thị trên chợ & gắn thẻ Video',
+                      icon: Icons.shopping_bag_outlined,
+                      color: AdminPalette.success,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Sắp Hết Hàng (<10)',
+                      value: '$lowStockCount',
+                      subtitle: 'Cần bổ sung tồn kho sớm',
+                      icon: Icons.warning_amber_rounded,
+                      color: AdminPalette.warning,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Search & Filter Toolbar
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AdminPalette.border),
+                ),
+                child: Row(
                   children: [
-                    // Brand Filter Dropdown (Only visible to Platform Super Admin)
-                    if (isPlatformAdmin)
-                      Row(
-                        children: [
-                          const Text(
-                            'Lọc theo Nhãn hàng: ',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54, fontSize: 13),
-                          ),
-                          const SizedBox(width: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 44,
+                        child: TextField(
+                          onChanged: (v) => setState(() => _searchQuery = v),
+                          decoration: InputDecoration(
+                            hintText: 'Tìm kiếm theo tên sản phẩm, thương hiệu hoặc shop...',
+                            hintStyle: const TextStyle(
+                              fontSize: 13,
+                              color: AdminPalette.textSecondary,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 20,
+                              color: AdminPalette.textSecondary,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                            border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.black12),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String?>(
-                                value: _selectedShopId,
-                                hint: const Text('Tất cả nhãn hàng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _selectedShopId = val;
-                                  });
-                                  context.read<AdminBloc>().add(AdminFetchProducts(shopId: val));
-                                },
-                                items: [
-                                  const DropdownMenuItem<String?>(
-                                    value: null,
-                                    child: Text('Tất cả nhãn hàng', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                                  ),
-                                  ...state.shops.map((shop) {
-                                    return DropdownMenuItem<String?>(
-                                      value: shop['id'],
-                                      child: Text(shop['shop_name'] ?? 'Shop', style: const TextStyle(fontSize: 13)),
-                                    );
-                                  }),
-                                ],
-                              ),
+                              borderSide: const BorderSide(color: AdminPalette.border),
                             ),
                           ),
-                        ],
-                      )
-                    else
-                      // Friendly brand identity message
-                      Text(
-                        'Gian hàng: ${AdminSession.loggedInShopName ?? "Đối tác Shareco"}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
+                        ),
                       ),
-                    // Add Product button
+                    ),
+                    const SizedBox(width: 14),
+                    _buildFilterPill('Tất cả (${allProducts.length})', 'all'),
+                    const SizedBox(width: 8),
+                    _buildFilterPill('Đang bán ($activeCount)', 'active'),
+                    const SizedBox(width: 8),
+                    _buildFilterPill('Sắp hết ($lowStockCount)', 'low_stock'),
+                    const SizedBox(width: 16),
                     ElevatedButton.icon(
-                      onPressed: () {
-                        context.go('/products/new');
-                      },
-                      icon: const Icon(Icons.add_circle_outline, size: 18),
-                      label: const Text('Đăng sản phẩm mới', style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () => context.go(AdminRouter.productCreate),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6200EE),
+                        backgroundColor: AdminPalette.primary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.add_box_rounded, size: 19),
+                      label: const Text(
+                        'Đăng Sản Phẩm Mới',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                // Products List
-                Expanded(
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: state.status == AdminStatus.loading
-                          ? const Center(child: CircularProgressIndicator())
-                          : state.products.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'Không tìm thấy sản phẩm nào.',
-                                    style: TextStyle(color: Colors.black45, fontSize: 16),
-                                  ),
-                                )
-                              : ListView(
-                                  children: [
-                                    _buildProductsTableHeader(),
-                                    const Divider(),
-                                    ...state.products.map((p) => _buildProductRow(context, p)),
-                                  ],
-                                ),
-                    ),
+              ),
+              const SizedBox(height: 16),
+
+              // Products DataTable Card
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AdminPalette.border),
                   ),
+                  child: state.status == AdminStatus.loading && allProducts.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : filteredProducts.isEmpty
+                          ? _buildEmptyState(context)
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: SingleChildScrollView(
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: DataTable(
+                                    headingRowColor: WidgetStateProperty.all(
+                                      const Color(0xFFF8FAFC),
+                                    ),
+                                    headingRowHeight: 50,
+                                    dataRowMinHeight: 78,
+                                    dataRowMaxHeight: 88,
+                                    horizontalMargin: 24,
+                                    columnSpacing: 22,
+                                    columns: const [
+                                      DataColumn(
+                                        label: Text(
+                                          'SẢN PHẨM',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'NHÃN HÀNG / SHOP',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'GIÁ BÁN & KHUYẾN MÃI',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'TỒN KHO / ĐÃ BÁN',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'TRẠNG THÁI',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'THAO TÁC',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    rows: filteredProducts.map((product) {
+                                      final isActive = product.status == 'active';
+                                      final isLowStock = product.stockTotal < 10;
+                                      final hasDiscount = product.originalPrice != null &&
+                                          product.originalPrice! > product.priceMin;
+                                      final discountPercent = hasDiscount
+                                          ? (((product.originalPrice! - product.priceMin) /
+                                                      product.originalPrice!) *
+                                                  100)
+                                              .round()
+                                          : 0;
+
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  width: 52,
+                                                  height: 52,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius: BorderRadius.circular(12),
+                                                    border: Border.all(
+                                                      color: AdminPalette.border,
+                                                    ),
+                                                    color: const Color(0xFFF1F5F9),
+                                                    image: product.coverPath != null
+                                                        ? DecorationImage(
+                                                            image: NetworkImage(
+                                                              product.coverPath!,
+                                                            ),
+                                                            fit: BoxFit.cover,
+                                                          )
+                                                        : null,
+                                                  ),
+                                                  child: product.coverPath == null
+                                                      ? const Icon(
+                                                          Icons.image_outlined,
+                                                          color: AdminPalette.textSecondary,
+                                                        )
+                                                      : null,
+                                                ),
+                                                const SizedBox(width: 14),
+                                                SizedBox(
+                                                  width: 260,
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.start,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.center,
+                                                    children: [
+                                                      Text(
+                                                        product.title,
+                                                        style: const TextStyle(
+                                                          fontWeight: FontWeight.w700,
+                                                          fontSize: 13.5,
+                                                          color: AdminPalette.textPrimary,
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      if (product.variants.isNotEmpty) ...[
+                                                        const SizedBox(height: 3),
+                                                        Text(
+                                                          '${product.variants.length} phân loại hàng',
+                                                          style: const TextStyle(
+                                                            fontSize: 11.5,
+                                                            color: AdminPalette.textSecondary,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 5,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: AdminPalette.primary
+                                                    .withValues(alpha: 0.08),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                product.shopName ??
+                                                    product.brand ??
+                                                    'Official Store',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AdminPalette.primary,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      AdminFormatters.formatVnd(
+                                                        product.priceMin,
+                                                      ),
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w800,
+                                                        color: AdminPalette.danger,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                    if (hasDiscount) ...[
+                                                      const SizedBox(width: 6),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(
+                                                          horizontal: 5,
+                                                          vertical: 2,
+                                                        ),
+                                                        decoration: BoxDecoration(
+                                                          color: AdminPalette.danger
+                                                              .withValues(alpha: 0.12),
+                                                          borderRadius:
+                                                              BorderRadius.circular(4),
+                                                        ),
+                                                        child: Text(
+                                                          '-$discountPercent%',
+                                                          style: const TextStyle(
+                                                            color: AdminPalette.danger,
+                                                            fontSize: 10.5,
+                                                            fontWeight: FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                                if (hasDiscount)
+                                                  Text(
+                                                    AdminFormatters.formatVnd(
+                                                      product.originalPrice!,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      decoration: TextDecoration.lineThrough,
+                                                      color: AdminPalette.textSecondary,
+                                                      fontSize: 11.5,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      isLowStock
+                                                          ? Icons.warning_amber_rounded
+                                                          : Icons.inventory_rounded,
+                                                      size: 14,
+                                                      color: isLowStock
+                                                          ? AdminPalette.danger
+                                                          : AdminPalette.success,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Kho: ${product.stockTotal}',
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.w700,
+                                                        fontSize: 13,
+                                                        color: isLowStock
+                                                            ? AdminPalette.danger
+                                                            : AdminPalette.textPrimary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  'Đã bán: ${product.soldCount}',
+                                                  style: const TextStyle(
+                                                    fontSize: 11.5,
+                                                    color: AdminPalette.textSecondary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          DataCell(
+                                            AdminStatusBadge(
+                                              label: isActive ? 'Đang bán' : 'Đã ẩn',
+                                              color: isActive
+                                                  ? AdminPalette.success
+                                                  : AdminPalette.textSecondary,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                _buildActionButton(
+                                                  tooltip: 'Chỉnh sửa sản phẩm',
+                                                  icon: Icons.edit_outlined,
+                                                  color: AdminPalette.primary,
+                                                  onTap: () => context.go(
+                                                    '/products/${product.id}/edit',
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _buildActionButton(
+                                                  tooltip: isActive
+                                                      ? 'Ẩn sản phẩm khỏi chợ'
+                                                      : 'Mở bán lại sản phẩm',
+                                                  icon: isActive
+                                                      ? Icons.visibility_off_outlined
+                                                      : Icons.visibility_outlined,
+                                                  color: isActive
+                                                      ? AdminPalette.warning
+                                                      : AdminPalette.success,
+                                                  onTap: () {
+                                                    final nextStatus =
+                                                        isActive ? 'inactive' : 'active';
+                                                    context.read<AdminBloc>().add(
+                                                          AdminToggleProductStatus(
+                                                            productId: product.id,
+                                                            status: nextStatus,
+                                                          ),
+                                                        );
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                          nextStatus == 'inactive'
+                                                              ? 'Đã ẩn sản phẩm [${product.title}]!'
+                                                              : 'Đã mở bán lại [${product.title}]!',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                            ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
           );
         },
       ),
     );
   }
 
-  Widget _buildProductsTableHeader() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: Text('SẢN PHẨM', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12))),
-          Expanded(flex: 2, child: Text('THƯƠNG HIỆU / SHOP', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12))),
-          Expanded(flex: 2, child: Text('ĐƠN GIÁ (VND)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12))),
-          Expanded(flex: 1, child: Text('TỒN KHO', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12))),
-          Expanded(flex: 1, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12))),
-          Expanded(flex: 1, child: Text('THAO TÁC', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black45, fontSize: 12))),
-        ],
+  Widget _buildFilterPill(String label, String value) {
+    final selected = _filterStatus == value;
+    return InkWell(
+      onTap: () => setState(() => _filterStatus = value),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? AdminPalette.primary.withValues(alpha: 0.1)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AdminPalette.primary : AdminPalette.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AdminPalette.primary : AdminPalette.textSecondary,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            fontSize: 12.5,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildProductRow(BuildContext context, Product p) {
-    final formattedPrice = p.priceMin.toStringAsFixed(0).replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
-        );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFF1F1F1))),
-      ),
-      child: Row(
-        children: [
-          // Product Thumbnail + Title
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    p.coverPath ?? 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=100',
-                    width: 48,
-                    height: 48,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 48,
-                      height: 48,
-                      color: Colors.grey.shade100,
-                      child: const Icon(Icons.image, color: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'ID: ${p.id.substring(0, 8)}...',
-                        style: const TextStyle(fontSize: 11, color: Colors.black38),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildActionButton({
+    required String tooltip,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          // Brand/Shop owner
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                const Icon(Icons.store, color: Color(0xFF6200EE), size: 16),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    p.shopName ?? 'Nhãn hàng',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black87),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Price
-          Expanded(
-            flex: 2,
-            child: Text(
-              '$formattedPriceđ',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Colors.red),
-            ),
-          ),
-          // Stock
-          Expanded(
-            flex: 1,
-            child: Text(
-              '${p.stockTotal} chiếc',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: p.stockTotal > 5 ? Colors.black54 : Colors.orange.shade700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          // Status
-          Expanded(
-            flex: 1,
-            child: Tooltip(
-              message: p.isActive ? 'Bấm để ngừng bán' : 'Bấm để mở bán lại',
-              child: InkWell(
-                onTap: () async {
-                  try {
-                    final nextStatus = p.isActive ? 'inactive' : 'active';
-                    
-                    // 1. Update product table
-                    await Supabase.instance.client
-                        .from('products')
-                        .update({'status': nextStatus})
-                        .eq('id', p.id);
-                        
-                    // 2. Also update status of the variants in product_variants table so they are synchronized
-                    await Supabase.instance.client
-                        .from('product_variants')
-                        .update({'status': nextStatus})
-                        .eq('product_id', p.id);
-                    
-                    if (!mounted) return;
-                    context.read<AdminBloc>().add(AdminFetchProducts(shopId: _selectedShopId));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(p.isActive 
-                          ? 'Đã chuyển trạng thái sản phẩm sang [Ẩn/Ngừng bán] 🛑' 
-                          : 'Đã mở bán lại sản phẩm thành công! 🎉'
-                        ),
-                        backgroundColor: p.isActive ? Colors.orange : Colors.green,
-                      ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Lỗi cập nhật trạng thái: $e'), backgroundColor: Colors.red),
-                    );
-                  }
-                },
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: p.isActive ? Colors.green.shade50 : Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: p.isActive ? Colors.green.shade200 : Colors.red.shade200,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    p.isActive ? 'Đang bán' : 'Ẩn/Ngừng',
-                    style: TextStyle(
-                      color: p.isActive ? Colors.green.shade700 : Colors.red.shade700,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // Action buttons
-          Expanded(
-            flex: 1,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // Edit
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.blue, size: 18),
-                  onPressed: () {
-                    context.go('/products/${p.id}/edit');
-                  },
-                ),
-                // Deactivate / Delete
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
-                  onPressed: () {
-                    _showDeleteConfirmDialog(context, p);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
+          child: Icon(icon, size: 18, color: color),
+        ),
       ),
     );
   }
 
-  void _showDeleteConfirmDialog(BuildContext parentContext, Product p) {
-    showDialog(
-      context: parentContext,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Xác nhận ẩn sản phẩm ⚠️'),
-          content: Text('Bạn có chắc chắn muốn ngừng kinh doanh sản phẩm "${p.title}" này không? Sản phẩm sẽ chuyển về trạng thái ẩn và không xuất hiện trên feed của khách hàng.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
             ),
-            ElevatedButton(
-              onPressed: () {
-                parentContext.read<AdminBloc>().add(AdminDeleteProduct(productId: p.id));
-                Navigator.pop(context);
-                ScaffoldMessenger.of(parentContext).showSnackBar(
-                  SnackBar(content: Text('Đã ngừng bán sản phẩm "${p.title}"'), backgroundColor: Colors.orange),
-                );
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-              child: const Text('Xác nhận ngừng bán', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Icon(
+              Icons.inventory_2_outlined,
+              size: 48,
+              color: AdminPalette.textSecondary,
             ),
-          ],
-        );
-      },
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Chưa có sản phẩm nào phù hợp',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AdminPalette.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Nhấn "Đăng Sản Phẩm Mới" để đưa sản phẩm lên sàn và gắn vào Video.',
+            style: TextStyle(color: AdminPalette.textSecondary, fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 }

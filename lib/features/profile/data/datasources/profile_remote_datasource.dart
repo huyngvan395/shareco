@@ -45,7 +45,7 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         isFollowing = f != null;
       }
 
-      return ProfileModel.fromJson(row as Map<String, dynamic>,
+      return ProfileModel.fromJson(row,
           isFollowing: isFollowing,
           isCurrentUser: uid == userId);
     } catch (e) {
@@ -69,7 +69,7 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
           .eq('id', userId)
           .select()
           .single();
-      return ProfileModel.fromJson(row as Map<String, dynamic>,
+      return ProfileModel.fromJson(row,
           isCurrentUser: true);
     } catch (e) {
       throw ServerException(e.toString());

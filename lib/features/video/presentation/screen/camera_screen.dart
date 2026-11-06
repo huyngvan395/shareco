@@ -44,16 +44,14 @@ class _CameraViewState extends State<_CameraView> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    context.read<CameraBloc>().add(const CameraDisposed());
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
-    final ctrl = context.read<CameraBloc>().state.controller;
-    if (ctrl == null || !ctrl.value.isInitialized) return;
+    if (!mounted) return;
     if (lifecycle == AppLifecycleState.inactive) {
-      ctrl.dispose();
+      context.read<CameraBloc>().add(const CameraDisposed());
     } else if (lifecycle == AppLifecycleState.resumed) {
       context.read<CameraBloc>().add(const CameraInitRequested());
     }

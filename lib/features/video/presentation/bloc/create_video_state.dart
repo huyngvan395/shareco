@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../ecommerce/product/domain/entities/product.dart';
 
 abstract class CreateVideoState extends Equatable {
   const CreateVideoState();
@@ -20,6 +21,7 @@ class CreateVideoPickedFile extends CreateVideoState {
   final bool allowComment;
   final bool allowDuet;
   final bool allowStitch;
+  final List<Product> taggedProducts;
 
   const CreateVideoPickedFile({
     required this.localPath,
@@ -28,6 +30,7 @@ class CreateVideoPickedFile extends CreateVideoState {
     this.allowComment = true,
     this.allowDuet = true,
     this.allowStitch = true,
+    this.taggedProducts = const [],
   });
 
   CreateVideoPickedFile copyWith({
@@ -36,6 +39,7 @@ class CreateVideoPickedFile extends CreateVideoState {
     bool? allowComment,
     bool? allowDuet,
     bool? allowStitch,
+    List<Product>? taggedProducts,
   }) => CreateVideoPickedFile(
     localPath: localPath,
     thumbnailPath: thumbnailPath ?? this.thumbnailPath,
@@ -43,11 +47,19 @@ class CreateVideoPickedFile extends CreateVideoState {
     allowComment: allowComment ?? this.allowComment,
     allowDuet: allowDuet ?? this.allowDuet,
     allowStitch: allowStitch ?? this.allowStitch,
+    taggedProducts: taggedProducts ?? this.taggedProducts,
   );
 
   @override
-  List<Object?> get props =>
-      [localPath, thumbnailPath, visibility, allowComment, allowDuet, allowStitch];
+  List<Object?> get props => [
+    localPath,
+    thumbnailPath,
+    visibility,
+    allowComment,
+    allowDuet,
+    allowStitch,
+    taggedProducts,
+  ];
 }
 
 class CreateVideoUploading extends CreateVideoState {

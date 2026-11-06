@@ -14,12 +14,14 @@ class GetProductsUseCase {
     String? search,
     String? categoryId,
     String? brand,
+    String? shopId,
   }) {
     return repository.getProducts(
       limit: limit,
       search: search,
       categoryId: categoryId,
       brand: brand,
+      shopId: shopId,
     );
   }
 }

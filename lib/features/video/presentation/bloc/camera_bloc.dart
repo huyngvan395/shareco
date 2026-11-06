@@ -182,7 +182,9 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
 
   Future<void> _onDispose(CameraDisposed _, Emitter<CameraState> emit) async {
     _stopTimer();
-    await state.controller?.dispose();
+    final ctrl = state.controller;
+    emit(state.copyWith(isInitialized: false, isRecording: false, isPaused: false));
+    await ctrl?.dispose();
   }
 
   @override

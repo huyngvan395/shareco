@@ -178,7 +178,7 @@ class CloudinaryService {
     final responseBody = await streamedResponse.stream.bytesToString();
 
     if (streamedResponse.statusCode != 200) {
-      print('❌ Cloudinary error: ${streamedResponse.statusCode} - $responseBody');
+      debugPrint('❌ Cloudinary error: ${streamedResponse.statusCode} - $responseBody');
       throw Exception('Upload failed');
     }
 

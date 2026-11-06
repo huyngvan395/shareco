@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../../../core/utils/storage_image.dart';
 
 class SellerRegistrationScreen extends StatefulWidget {
   const SellerRegistrationScreen({super.key});
@@ -63,11 +66,26 @@ class _SellerRegistrationScreenState extends State<SellerRegistrationScreen> {
     super.dispose();
   }
 
-  // Auto generate slug from name
+  // Auto generate slug from name (supporting Vietnamese diacritics)
   void _onNameChanged(String val) {
-    final clean = val
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
+    var clean = val.toLowerCase();
+    const vietnameseMap = <String, String>{
+      'a': 'áàảãạăắằẳẵặâấầẩẫậ',
+      'd': 'đ',
+      'e': 'éèẻẽẹêếềểễệ',
+      'i': 'íìỉĩị',
+      'o': 'óòỏõọôốồổỗộơớờởỡợ',
+      'u': 'úùủũụưứừửữự',
+      'y': 'ýỳỷỹỵ',
+    };
+    vietnameseMap.forEach((nonAccent, accented) {
+      for (final ch in accented.split('')) {
+        clean = clean.replaceAll(ch, nonAccent);
+      }
+    });
+    clean = clean
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+        .trim()
         .replaceAll(RegExp(r'\s+'), '-');
     _slugCtrl.text = clean;
   }
@@ -262,11 +280,31 @@ class _SellerRegistrationScreenState extends State<SellerRegistrationScreen> {
   }
 
   Widget _buildExistingShopView() {
-    final logoUrl = _existingShopData?['logo_path'] ?? '';
-    final coverUrl = _existingShopData?['cover_path'] ?? '';
+    final shopId = _existingShopData?['id'] as String?;
+    final logoUrl = StorageImage.publicUrl(
+          _existingShopData?['logo_path'] as String?,
+          bucket: 'avatars',
+        ) ??
+        '';
+    final coverUrl = StorageImage.publicUrl(
+          _existingShopData?['cover_path'] as String?,
+          bucket: 'avatars',
+        ) ??
+        '';
     final shopName = _existingShopData?['shop_name'] ?? 'Cửa hàng của bạn';
     final shopSlug = _existingShopData?['shop_slug'] ?? '';
     final description = _existingShopData?['description'] ?? 'Chưa có mô tả';
+    final status = (_existingShopData?['status'] as String?) ?? 'active';
+    final isSuspended = status == 'suspended';
+    final isPending = status == 'pending';
+    final statusColor = isSuspended
+        ? Colors.red
+        : (isPending ? Colors.orange : Colors.green);
+    final statusMessage = isSuspended
+        ? 'Cửa hàng của bạn hiện đang tạm ngưng hoạt động.'
+        : (isPending
+            ? 'Hồ sơ đăng ký cửa hàng của bạn đang chờ quản trị viên phê duyệt.'
+            : 'Bạn đã đăng ký tài khoản người bán thành công! Nhãn hàng hiện đang hoạt động và sẵn sàng kinh doanh.');
 
     return Center(
       child: SingleChildScrollView(
@@ -339,9 +377,13 @@ class _SellerRegistrationScreenState extends State<SellerRegistrationScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              shopName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
+                            Flexible(
+                              child: Text(
+                                shopName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
+                              ),
                             ),
                             const SizedBox(width: 6),
                             const Icon(Icons.verified_rounded, color: Colors.blue, size: 20),
@@ -362,18 +404,26 @@ class _SellerRegistrationScreenState extends State<SellerRegistrationScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.06),
+                            color: statusColor.withOpacity(0.06),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green.withOpacity(0.15), width: 1.5),
+                            border: Border.all(color: statusColor.withOpacity(0.15), width: 1.5),
                           ),
-                          child: const Row(
+                          child: Row(
                             children: [
-                              Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
-                              SizedBox(width: 12),
+                              Icon(
+                                isSuspended
+                                    ? Icons.block_rounded
+                                    : (isPending
+                                        ? Icons.hourglass_top_rounded
+                                        : Icons.check_circle_rounded),
+                                color: statusColor,
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'Bạn đã đăng ký tài khoản người bán thành công! Nhãn hàng hiện đang hoạt động và sẵn sàng kinh doanh.',
-                                  style: TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.w500, height: 1.3),
+                                  statusMessage,
+                                  style: TextStyle(color: statusColor, fontSize: 13, fontWeight: FontWeight.w500, height: 1.3),
                                 ),
                               ),
                             ],
@@ -385,21 +435,41 @@ class _SellerRegistrationScreenState extends State<SellerRegistrationScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            if (shopId != null && shopId.isNotEmpty) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: () => context.push('/shop/$shopId'),
+                  icon: const Icon(Icons.storefront_outlined),
+                  label: const Text(
+                    'Xem Cửa Hàng Của Tôi',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEE4D2D),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
+              height: 48,
+              child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEE4D2D),
-                  foregroundColor: Colors.white,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black87,
+                  side: const BorderSide(color: Colors.black26),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 2,
                 ),
                 child: const Text(
                   'Quay lại Trang chủ',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ),

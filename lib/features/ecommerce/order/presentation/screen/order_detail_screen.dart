@@ -249,6 +249,9 @@ class _ItemsSection extends StatelessWidget {
     return _SectionCard(
       title: order.shopName ?? 'Shop',
       titleIcon: Icons.storefront_outlined,
+      onTitleTap: order.shopId.isNotEmpty
+          ? () => context.push('/shop/${order.shopId}')
+          : null,
       child: Column(
         children: order.items.map((item) {
           return _OrderItemRow(
@@ -568,11 +571,13 @@ class _OrderItemImage extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   final String? title;
   final IconData? titleIcon;
+  final VoidCallback? onTitleTap;
   final Widget child;
 
   const _SectionCard({
     this.title,
     this.titleIcon,
+    this.onTitleTap,
     required this.child,
   });
 
@@ -588,25 +593,35 @@ class _SectionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title != null) ...[
-            Row(
-              children: [
-                if (titleIcon != null) ...[
-                  Icon(titleIcon, size: 18, color: Colors.black87),
-                  const SizedBox(width: AppSizes.xs),
-                ],
-                Expanded(
-                  child: Text(
-                    title!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: AppSizes.fontXl,
-                      fontWeight: FontWeight.w900,
+            GestureDetector(
+              onTap: onTitleTap,
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                children: [
+                  if (titleIcon != null) ...[
+                    Icon(titleIcon, size: 18, color: Colors.black87),
+                    const SizedBox(width: AppSizes.xs),
+                  ],
+                  Expanded(
+                    child: Text(
+                      title!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: AppSizes.fontXl,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  if (onTitleTap != null)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: Colors.black45,
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSizes.md),
           ],

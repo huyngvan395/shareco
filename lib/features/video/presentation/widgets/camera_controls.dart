@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shareco/features/video/presentation/bloc/camera_event.dart';
 import 'package:shareco/features/video/presentation/bloc/camera_state.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_sizes.dart';
 import '../../domain/entities/filter_entity.dart';
 import '../bloc/camera_bloc.dart';
 

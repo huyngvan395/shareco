@@ -41,6 +41,28 @@ class ReviewRemoteDataSourceImpl implements ReviewRemoteDataSource {
           .select()
           .single();
 
+      // Update rating_avg and rating_count on products
+      try {
+        final allReviews = await SupabaseService.from('product_reviews')
+            .select('rating')
+            .eq('product_id', productId);
+        final rows =
+            (allReviews as List).whereType<Map<String, dynamic>>().toList();
+        if (rows.isNotEmpty) {
+          final totalRating = rows.fold<int>(
+            0,
+            (sum, r) => sum + ((r['rating'] as num?)?.toInt() ?? 0),
+          );
+          final avg = totalRating / rows.length;
+          await SupabaseService.from('products')
+              .update({
+                'rating_avg': double.parse(avg.toStringAsFixed(2)),
+                'rating_count': rows.length,
+              })
+              .eq('id', productId);
+        }
+      } catch (_) {}
+
       return ReviewModel.fromJson(response);
     } on PostgrestException catch (e) {
       if (e.code == '23505') {

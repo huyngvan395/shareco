@@ -25,6 +25,7 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
   late final ShopProfileBloc _bloc;
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounce;
+  bool _isFollowing = false;
 
   @override
   void initState() {
@@ -124,6 +125,13 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
       pinned: true,
       backgroundColor: Colors.white,
       foregroundColor: Colors.black87,
+      actions: [
+        IconButton(
+          tooltip: 'Giỏ hàng',
+          icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
+          onPressed: () => context.push('/cart'),
+        ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -183,7 +191,7 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${shop.followerCount} Người theo dõi',
+                          '${shop.followerCount + (_isFollowing ? 1 : 0)} Người theo dõi',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 13,
@@ -193,18 +201,30 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
                     ),
                   ),
                   // Follow Button
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEE4D2D),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      '+ Theo dõi',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isFollowing = !_isFollowing;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _isFollowing
+                            ? Colors.white.withValues(alpha: 0.25)
+                            : const Color(0xFFEE4D2D),
+                        borderRadius: BorderRadius.circular(4),
+                        border: _isFollowing
+                            ? Border.all(color: Colors.white70)
+                            : null,
+                      ),
+                      child: Text(
+                        _isFollowing ? 'Đang theo dõi' : '+ Theo dõi',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),
@@ -219,6 +239,9 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
 
   Widget _buildShopStats(ShopProfileLoaded state) {
     final shop = state.shop;
+    final actualProductCount = state.products.length > shop.productCount
+        ? state.products.length
+        : shop.productCount;
     return SliverToBoxAdapter(
       child: Container(
         color: Colors.white,
@@ -229,7 +252,7 @@ class _ShopProfileScreenState extends State<ShopProfileScreen> {
           children: [
             _buildStatItem(Icons.star_rounded, '${shop.ratingAvg.toStringAsFixed(1)}/5.0', 'Đánh giá', color: Colors.amber),
             _buildDivider(),
-            _buildStatItem(Icons.inventory_2_outlined, '${shop.productCount}', 'Sản phẩm'),
+            _buildStatItem(Icons.inventory_2_outlined, '$actualProductCount', 'Sản phẩm'),
             _buildDivider(),
             _buildStatItem(Icons.chat_outlined, '98%', 'Phản hồi'),
           ],

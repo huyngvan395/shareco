@@ -60,6 +60,7 @@ class CreateVideoUseCase {
     required String thumbnailPath,
     String? caption,
     String visibility = 'public',
+    List<String> taggedProductIds = const [],
     void Function(double progress)? onProgress, // 👈 thêm, bỏ durationMs/width/height
   }) =>
       repo.createVideo(
@@ -67,6 +68,7 @@ class CreateVideoUseCase {
         thumbnailPath: thumbnailPath,
         caption: caption,
         visibility: visibility,
+        taggedProductIds: taggedProductIds,
         onProgress: onProgress,
       );
 }

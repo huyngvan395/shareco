@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:shareco/core/layout/main_scaffold.dart';
-import '../constants/app_colors.dart';
 import '../constants/app_sizes.dart';
 import '../constants/app_strings.dart';
 

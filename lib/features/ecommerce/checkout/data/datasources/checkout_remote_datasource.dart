@@ -125,12 +125,16 @@ class CheckoutRemoteDataSourceImpl implements CheckoutRemoteDataSource {
                 .eq('id', item.variantId!);
           }
           final prodRes = await SupabaseService.from('products')
-              .select('stock_total')
+              .select('stock_total,sold_count')
               .eq('id', item.productId)
               .single();
           final currentProdStock = _asInt(prodRes['stock_total']);
+          final currentSoldCount = _asInt(prodRes['sold_count']);
           await SupabaseService.from('products')
-              .update({'stock_total': (currentProdStock - item.qty).clamp(0, 999999)})
+              .update({
+                'stock_total': (currentProdStock - item.qty).clamp(0, 999999),
+                'sold_count': (currentSoldCount + item.qty).clamp(0, 999999999),
+              })
               .eq('id', item.productId);
         }
 
@@ -261,12 +265,16 @@ class CheckoutRemoteDataSourceImpl implements CheckoutRemoteDataSource {
             .eq('id', variantId);
       }
       final prodRes = await SupabaseService.from('products')
-          .select('stock_total')
+          .select('stock_total,sold_count')
           .eq('id', productId)
           .single();
       final currentProdStock = _asInt(prodRes['stock_total']);
+      final currentSoldCount = _asInt(prodRes['sold_count']);
       await SupabaseService.from('products')
-          .update({'stock_total': (currentProdStock - qty).clamp(0, 999999)})
+          .update({
+            'stock_total': (currentProdStock - qty).clamp(0, 999999),
+            'sold_count': (currentSoldCount + qty).clamp(0, 999999999),
+          })
           .eq('id', productId);
 
       return CheckoutResult(

@@ -10,6 +10,7 @@ abstract class ProductRemoteDataSource {
     String? search,
     String? categoryId,
     String? brand,
+    String? shopId,
   });
 
   Future<ProductModel> getProductDetail(String productId);
@@ -26,12 +27,27 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
       'product_variants(id,product_id,sku,variant_name,price,compare_at_price,'
       'stock_qty,weight_grams,status,created_at)';
 
+  static String _extractBrandKeyword(String rawBrand) {
+    final cleaned = rawBrand
+        .replaceAll(
+          RegExp(
+            r'\b(official|flagship|store|shop|mall|vn|vietnam|cửa hàng|cua hang)\b',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return cleaned.isEmpty ? rawBrand.trim() : cleaned;
+  }
+
   @override
   Future<List<ProductModel>> getProducts({
     int limit = 20,
     String? search,
     String? categoryId,
     String? brand,
+    String? shopId,
   }) async {
     try {
       dynamic query = SupabaseService.from('products')
@@ -47,8 +63,33 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
         query = query.eq('category_id', categoryId);
       }
 
-      if (brand != null && brand.isNotEmpty) {
-        query = query.eq('brand', brand);
+      final cleanShopId = shopId?.trim() ?? '';
+      final cleanBrand = brand?.trim() ?? '';
+
+      if (cleanShopId.isNotEmpty && cleanBrand.isNotEmpty) {
+        final brandKeyword = _extractBrandKeyword(cleanBrand);
+        if (brandKeyword.toLowerCase() != cleanBrand.toLowerCase() &&
+            brandKeyword.isNotEmpty) {
+          query = query.or(
+            'shop_id.eq.$cleanShopId,brand.ilike.%$cleanBrand%,brand.ilike.%$brandKeyword%',
+          );
+        } else {
+          query = query.or(
+            'shop_id.eq.$cleanShopId,brand.ilike.%$cleanBrand%',
+          );
+        }
+      } else if (cleanShopId.isNotEmpty) {
+        query = query.eq('shop_id', cleanShopId);
+      } else if (cleanBrand.isNotEmpty) {
+        final brandKeyword = _extractBrandKeyword(cleanBrand);
+        if (brandKeyword.toLowerCase() != cleanBrand.toLowerCase() &&
+            brandKeyword.isNotEmpty) {
+          query = query.or(
+            'brand.ilike.%$cleanBrand%,brand.ilike.%$brandKeyword%',
+          );
+        } else {
+          query = query.ilike('brand', '%$cleanBrand%');
+        }
       }
 
       final response = await query

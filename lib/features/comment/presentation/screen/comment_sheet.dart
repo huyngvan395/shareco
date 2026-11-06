@@ -1,6 +1,5 @@
 // features/comment/presentation/comment_sheet.dart
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shareco/core/helpers/require_auth.dart';
@@ -17,7 +16,11 @@ import '../../../feed/presentation/bloc/feed_event.dart';
 
 class CommentSheet {
   static void show(BuildContext context, {required String videoId}) {
-    final feedBloc = context.read<FeedBloc>();
+    FeedBloc? feedBloc;
+    try {
+      feedBloc = context.read<FeedBloc>();
+    } catch (_) {}
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -31,9 +34,8 @@ class CommentSheet {
             BlocProvider(
               create: (_) =>
                   CommentBloc(repo: sl())..add(CommentLoadRequested(videoId)),
-              child: _CommentSheetBody(videoId: videoId),
             ),
-            BlocProvider.value(value: feedBloc),
+            if (feedBloc != null) BlocProvider.value(value: feedBloc),
           ],
           child: _CommentSheetBody(videoId: videoId),
         );
@@ -71,7 +73,9 @@ class _CommentSheetBodyState extends State<_CommentSheetBody> {
       ctx.read<CommentBloc>().add(
         CommentPostRequested(content: text, parentId: _replyingToId),
       );
-      ctx.read<FeedBloc>().add(FeedCommentChanged(videoId: widget.videoId));
+      try {
+        ctx.read<FeedBloc>().add(FeedCommentChanged(videoId: widget.videoId));
+      } catch (_) {}
       _ctrl.clear();
       setState(() {
         _replyingToId = null;

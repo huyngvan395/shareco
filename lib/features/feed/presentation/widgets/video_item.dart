@@ -4,12 +4,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:shareco/features/comment/presentation/screen/comment_sheet.dart';
 import 'package:video_player/video_player.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/helpers/require_auth.dart';
 import '../../../../core/utils/storage_image.dart';
 import '../../../../routes/app_router.dart';
+import '../../../ecommerce/product/domain/entities/product.dart';
 import '../../../video/domain/entities/video_entity.dart';
 import '../bloc/feed_bloc.dart';
 import '../bloc/feed_event.dart';
@@ -89,7 +91,7 @@ class _VideoItemState extends State<VideoItem>
         _initialized = true;
         _initError = null;
       });
-      if (widget.isActive) await _ctrl!.play();
+      if (mounted && widget.isActive) await _ctrl!.play();
       Future.delayed(const Duration(milliseconds: 2000), () {
         if (mounted && !_hasFirstFrame && _initialized) {
           setState(() => _hasFirstFrame = true);
@@ -208,8 +210,12 @@ class _VideoItemState extends State<VideoItem>
             child: FittedBox(
               fit: BoxFit.cover,
               child: SizedBox(
-                width: _ctrl!.value.size.width,
-                height: _ctrl!.value.size.height,
+                width: _ctrl!.value.size.width > 0
+                    ? _ctrl!.value.size.width
+                    : 1080,
+                height: _ctrl!.value.size.height > 0
+                    ? _ctrl!.value.size.height
+                    : 1920,
                 child: VideoPlayer(_ctrl!),
               ),
             ),
@@ -231,16 +237,6 @@ class _VideoItemState extends State<VideoItem>
             ),
       ],
     );
-  }
-
-  double _safeAspectRatio(VideoPlayerController controller) {
-    final aspectRatio = controller.value.aspectRatio;
-    if (aspectRatio.isFinite && aspectRatio > 0) return aspectRatio;
-
-    final size = controller.value.size;
-    if (size.width > 0 && size.height > 0) return size.width / size.height;
-
-    return 9 / 16;
   }
 
   Widget _buildGradient() => Positioned.fill(
@@ -314,6 +310,10 @@ class _VideoItemState extends State<VideoItem>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (v.taggedProducts.isNotEmpty) ...[
+            _VideoProductTagBanner(products: v.taggedProducts),
+            const SizedBox(height: 10),
+          ],
           GestureDetector(
             onTap: () => context.push(Routes.profileOf(v.authorId)),
             child: Row(
@@ -610,13 +610,6 @@ class _TikTokScrubberState extends State<_TikTokScrubber> {
   bool _dragging = false;
   double _dragValue = 0;
 
-  double get _progress {
-    final dur = widget.controller.value.duration.inMilliseconds;
-    if (dur == 0) return 0;
-    if (_dragging) return _dragValue;
-    return widget.controller.value.position.inMilliseconds / dur;
-  }
-
   void _onDragStart(double dx, double width) {
     final p = (dx / width).clamp(0.0, 1.0);
     setState(() {
@@ -774,5 +767,380 @@ class _TikTokScrubberState extends State<_TikTokScrubber> {
     final m = totalSeconds ~/ 60;
     final s = totalSeconds % 60;
     return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+// ─── TikTok Shop Product Link Banner & Bottom Sheet ──────────────────────────
+
+class _VideoProductTagBanner extends StatelessWidget {
+  final List<Product> products;
+  const _VideoProductTagBanner({required this.products});
+
+  void _onTapBanner(BuildContext context) {
+    if (products.length == 1) {
+      context.push('/products/${products.first.id}');
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _VideoProductsBottomSheet(products: products),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = products.first;
+    final imageUrl = StorageImage.publicUrl(primary.displayImagePath);
+    final vndFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Top pill link (TikTok yellow/orange shopping bag link)
+        GestureDetector(
+          onTap: () => _onTapBanner(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.55),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B00), Color(0xFFFF2D55)],
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_rounded,
+                    color: Colors.white,
+                    size: 11,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    products.length > 1
+                        ? 'Giỏ hàng (${products.length}) · ${primary.title}'
+                        : 'Sản phẩm · ${primary.title}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFFFFD166),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFFFD166),
+                  size: 14,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        // Product showcase card with direct Buy button
+        GestureDetector(
+          onTap: () => context.push('/products/${primary.id}'),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 290),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.68),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFFF6B00).withOpacity(0.45),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    color: const Color(0xFF222222),
+                    child: imageUrl != null
+                        ? CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => const Icon(
+                              Icons.shopping_bag_outlined,
+                              color: Colors.white54,
+                              size: 20,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.shopping_bag_outlined,
+                            color: Colors.white54,
+                            size: 20,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        primary.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Text(
+                            vndFormat.format(primary.priceMin),
+                            style: const TextStyle(
+                              color: Color(0xFFFF6B00),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (primary.discountPercent > 0) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF2D55).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '-${primary.discountPercent}%',
+                                style: const TextStyle(
+                                  color: Color(0xFFFF2D55),
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B00), Color(0xFFFF2D55)],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Mua',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoProductsBottomSheet extends StatelessWidget {
+  final List<Product> products;
+  const _VideoProductsBottomSheet({required this.products});
+
+  @override
+  Widget build(BuildContext context) {
+    final vndFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.65,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF141414),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B00), Color(0xFFFF2D55)],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Sản phẩm trong video (${products.length})',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFF242424)),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(16),
+              itemCount: products.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (ctx, i) {
+                final product = products[i];
+                final imageUrl =
+                    StorageImage.publicUrl(product.displayImagePath);
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/products/${product.id}');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF2C2C2C)),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: 60,
+                            height: 60,
+                            color: const Color(0xFF282828),
+                            child: imageUrl != null
+                                ? CachedNetworkImage(
+                                    imageUrl: imageUrl,
+                                    fit: BoxFit.cover,
+                                  )
+                                : const Icon(
+                                    Icons.shopping_bag_outlined,
+                                    color: Colors.white38,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                product.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                vndFormat.format(product.priceMin),
+                                style: const TextStyle(
+                                  color: Color(0xFFFF6B00),
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF6B00), Color(0xFFFF2D55)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Mua ngay',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

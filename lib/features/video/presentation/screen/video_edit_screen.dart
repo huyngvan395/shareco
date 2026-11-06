@@ -1,15 +1,20 @@
 // features/video/presentation/screen/video_edit_screen.dart
 
+import 'dart:async';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:shareco/core/notifier/video_posted_notifier.dart';
 import 'package:shareco/features/video/presentation/bloc/create_video_event.dart';
 import 'package:shareco/features/video/presentation/bloc/create_video_state.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_sizes.dart';
-import '../../domain/entities/filter_entity.dart';
+import '../../../../core/utils/storage_image.dart';
+import '../../../../di/injector.dart';
+import '../../../ecommerce/product/domain/entities/product.dart';
+import '../../../ecommerce/product/domain/usecases/get_products_usecase.dart';
 import '../bloc/create_video_bloc.dart';
 
 class VideoEditScreen extends StatefulWidget {
@@ -36,7 +41,7 @@ class _VideoEditScreenState extends State<VideoEditScreen>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     context.read<CreateVideoBloc>().add(CreateVideoPickedFromPath(
       localPath: widget.localVideoPath,
       thumbnailPath: widget.thumbnailPath ?? '',
@@ -59,7 +64,7 @@ class _VideoEditScreenState extends State<VideoEditScreen>
           widget.onVideoPosted?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Đăng video thành công! '),
+              content: Text('Đăng tải thành công! Video đang chờ Admin kiểm duyệt để lên Xu hướng.'),
               backgroundColor: AppColors.success,
             ),
           );
@@ -81,6 +86,8 @@ class _VideoEditScreenState extends State<VideoEditScreen>
             if (state is CreateVideoUploading) {
               return _buildUploading(state.progress);
             }
+            final taggedCount =
+                state is CreateVideoPickedFile ? state.taggedProducts.length : 0;
             return Column(
               children: [
                 // ── Preview strip ──────────────────────────────────────────
@@ -102,10 +109,37 @@ class _VideoEditScreenState extends State<VideoEditScreen>
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
-                  tabs: const [
-                    Tab(text: 'Mô tả'),
-                    Tab(text: 'Ảnh bìa'),
-                    Tab(text: 'Cài đặt'),
+                  tabs: [
+                    const Tab(text: 'Mô tả'),
+                    Tab(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Sản phẩm'),
+                          if (taggedCount > 0) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF6B00),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '$taggedCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const Tab(text: 'Ảnh bìa'),
+                    const Tab(text: 'Cài đặt'),
                   ],
                 ),
                 Expanded(
@@ -113,6 +147,7 @@ class _VideoEditScreenState extends State<VideoEditScreen>
                     controller: _tabCtrl,
                     children: [
                       _CaptionTab(ctrl: _captionCtrl),
+                      const _ProductTagTab(),
                       const _ThumbnailTab(),
                       const _SettingsTab(),
                     ],
@@ -473,9 +508,669 @@ class _CaptionTab extends StatelessWidget {
               .map((tag) => _HashtagChip(tag: tag, ctrl: ctrl))
               .toList(),
         ),
+        const SizedBox(height: 24),
+        const Divider(color: Color(0xFF1E1E1E)),
+        const SizedBox(height: 16),
+        // ── TikTok Shop Product Link Section ──────────────────────────────
+        const _CaptionProductLinkSection(),
       ],
     ),
   );
+}
+
+class _CaptionProductLinkSection extends StatelessWidget {
+  const _CaptionProductLinkSection();
+
+  void _openProductPicker(BuildContext context) {
+    final bloc = context.read<CreateVideoBloc>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: const _ProductPickerBottomSheet(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<CreateVideoBloc, CreateVideoState>(
+      builder: (ctx, state) {
+        final picked = state is CreateVideoPickedFile ? state : null;
+        final tagged = picked?.taggedProducts ?? const <Product>[];
+        final vndFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'GẮN LINK SẢN PHẨM (TIKTOK SHOP)',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const Spacer(),
+                if (tagged.isNotEmpty)
+                  Text(
+                    'Đã chọn ${tagged.length} sản phẩm',
+                    style: const TextStyle(
+                      color: Color(0xFFFF6B00),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => _openProductPicker(ctx),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFFFF6B00).withOpacity(0.16),
+                      const Color(0xFFFF2D55).withOpacity(0.12),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFFF6B00).withOpacity(0.45),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF6B00), Color(0xFFFF2D55)],
+                        ),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: const Icon(
+                        Icons.shopping_bag_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tagged.isEmpty
+                                ? 'Thêm sản phẩm / Gắn link mua hàng'
+                                : 'Thêm hoặc chỉnh sửa sản phẩm đã gắn',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Người xem có thể bấm vào link sản phẩm ngay dưới video',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.55),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: Color(0xFFFF6B00),
+                      size: 22,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (tagged.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ...tagged.map((product) {
+                final imageUrl =
+                    StorageImage.publicUrl(product.displayImagePath);
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161616),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF2A2A2A)),
+                  ),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          color: const Color(0xFF222222),
+                          child: imageUrl != null
+                              ? CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, __, ___) => const Icon(
+                                    Icons.shopping_bag_outlined,
+                                    color: Colors.white38,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.shopping_bag_outlined,
+                                  color: Colors.white38,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              product.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                Text(
+                                  vndFormat.format(product.priceMin),
+                                  style: const TextStyle(
+                                    color: Color(0xFFFF6B00),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (product.shopName != null &&
+                                    product.shopName!.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      '· ${product.shopName}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.45),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => ctx
+                            .read<CreateVideoBloc>()
+                            .add(CreateVideoProductTagToggled(product)),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white54,
+                          size: 18,
+                        ),
+                        tooltip: 'Gỡ sản phẩm',
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ─── Product Tag Tab & Picker Sheet ───────────────────────────────────────────
+
+class _ProductTagTab extends StatelessWidget {
+  const _ProductTagTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _ProductSelectorView(isBottomSheet: false);
+  }
+}
+
+class _ProductPickerBottomSheet extends StatelessWidget {
+  const _ProductPickerBottomSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * 0.82;
+    return Container(
+      height: height,
+      decoration: const BoxDecoration(
+        color: Color(0xFF121212),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B00), Color(0xFFFF2D55)],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Gắn sản phẩm vào video',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                BlocBuilder<CreateVideoBloc, CreateVideoState>(
+                  builder: (ctx, state) {
+                    final count = state is CreateVideoPickedFile
+                        ? state.taggedProducts.length
+                        : 0;
+                    return TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6B00),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 6),
+                      ),
+                      child: Text(
+                        count > 0 ? 'Xong ($count)' : 'Đóng',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFF222222)),
+          const Expanded(
+            child: _ProductSelectorView(isBottomSheet: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductSelectorView extends StatefulWidget {
+  final bool isBottomSheet;
+  const _ProductSelectorView({required this.isBottomSheet});
+
+  @override
+  State<_ProductSelectorView> createState() => _ProductSelectorViewState();
+}
+
+class _ProductSelectorViewState extends State<_ProductSelectorView> {
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  List<Product> _products = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProducts();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchProducts({String? query}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final getProducts = sl<GetProductsUseCase>();
+    final res = await getProducts(limit: 40, search: query);
+    if (!mounted) return;
+    res.fold(
+      (f) => setState(() {
+        _loading = false;
+        _error = f.message;
+      }),
+      (items) => setState(() {
+        _loading = false;
+        _products = items;
+      }),
+    );
+  }
+
+  void _onSearchChanged(String val) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      _fetchProducts(query: val.trim());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vndFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: _onSearchChanged,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: 'Tìm sản phẩm để gắn link vào video...',
+              hintStyle: TextStyle(
+                color: Colors.white.withOpacity(0.35),
+                fontSize: 13,
+              ),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: Colors.white54,
+                size: 20,
+              ),
+              suffixIcon: _searchCtrl.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear_rounded,
+                          color: Colors.white54, size: 18),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        _fetchProducts();
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: const Color(0xFF1A1A1A),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF2C2C2C)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF2C2C2C)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFFFF6B00)),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFFF6B00),
+                    strokeWidth: 2,
+                  ),
+                )
+              : _error != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.error_outline_rounded,
+                                color: Colors.white38, size: 40),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Không tải được danh sách sản phẩm:\n$_error',
+                              style: const TextStyle(
+                                  color: Colors.white54, fontSize: 13),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () =>
+                                  _fetchProducts(query: _searchCtrl.text),
+                              child: const Text('Thử lại',
+                                  style: TextStyle(color: Color(0xFFFF6B00))),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : _products.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'Không tìm thấy sản phẩm phù hợp',
+                            style:
+                                TextStyle(color: Colors.white54, fontSize: 13),
+                          ),
+                        )
+                      : BlocBuilder<CreateVideoBloc, CreateVideoState>(
+                          builder: (ctx, state) {
+                            final tagged = state is CreateVideoPickedFile
+                                ? state.taggedProducts
+                                : const <Product>[];
+                            final taggedIds = {
+                              for (final p in tagged) p.id,
+                            };
+
+                            return ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                              itemCount: _products.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (_, i) {
+                                final product = _products[i];
+                                final isSelected =
+                                    taggedIds.contains(product.id);
+                                final imageUrl = StorageImage.publicUrl(
+                                    product.displayImagePath);
+
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () => ctx
+                                      .read<CreateVideoBloc>()
+                                      .add(CreateVideoProductTagToggled(
+                                          product)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? const Color(0xFFFF6B00)
+                                              .withOpacity(0.1)
+                                          : const Color(0xFF161616),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? const Color(0xFFFF6B00)
+                                            : const Color(0xFF262626),
+                                        width: isSelected ? 1.5 : 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: Container(
+                                            width: 56,
+                                            height: 56,
+                                            color: const Color(0xFF222222),
+                                            child: imageUrl != null
+                                                ? CachedNetworkImage(
+                                                    imageUrl: imageUrl,
+                                                    fit: BoxFit.cover,
+                                                    errorWidget: (_, __, ___) =>
+                                                        const Icon(
+                                                      Icons
+                                                          .shopping_bag_outlined,
+                                                      color: Colors.white38,
+                                                    ),
+                                                  )
+                                                : const Icon(
+                                                    Icons.shopping_bag_outlined,
+                                                    color: Colors.white38,
+                                                  ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                product.title,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    vndFormat.format(
+                                                        product.priceMin),
+                                                    style: const TextStyle(
+                                                      color: Color(0xFFFF6B00),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  if (product.shopName !=
+                                                          null &&
+                                                      product.shopName!
+                                                          .isNotEmpty) ...[
+                                                    const SizedBox(width: 6),
+                                                    Flexible(
+                                                      child: Text(
+                                                        '· ${product.shopName}',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          color: Colors.white
+                                                              .withOpacity(0.4),
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            gradient: isSelected
+                                                ? null
+                                                : const LinearGradient(
+                                                    colors: [
+                                                      Color(0xFFFF6B00),
+                                                      Color(0xFFFF2D55),
+                                                    ],
+                                                  ),
+                                            color: isSelected
+                                                ? const Color(0xFF2A2A2A)
+                                                : null,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isSelected
+                                                    ? Icons.check_rounded
+                                                    : Icons.add_link_rounded,
+                                                color: Colors.white,
+                                                size: 15,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                isSelected
+                                                    ? 'Đã gắn'
+                                                    : 'Gắn link',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+  }
 }
 
 class _HashtagChip extends StatelessWidget {

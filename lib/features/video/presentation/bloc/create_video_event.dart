@@ -1,13 +1,9 @@
 import 'package:equatable/equatable.dart';
+import '../../../ecommerce/product/domain/entities/product.dart';
 
 abstract class CreateVideoEvent extends Equatable {
   const CreateVideoEvent();
   @override List<Object?> get props => [];
-}
-
-/// User picked a file from gallery or finished recording
-class CreateVideoPickRequested extends CreateVideoEvent {
-  const CreateVideoPickRequested();
 }
 
 class CreateVideoPickedFromPath extends CreateVideoEvent {
@@ -15,14 +11,6 @@ class CreateVideoPickedFromPath extends CreateVideoEvent {
   final String? thumbnailPath;
   const CreateVideoPickedFromPath({required this.localPath, required this.thumbnailPath});
   @override List<Object?> get props => [localPath, thumbnailPath];
-}
-
-class CreateVideoRecordRequested extends CreateVideoEvent {
-  const CreateVideoRecordRequested();
-}
-
-class CreateVideoResetRequested extends CreateVideoEvent {
-  const CreateVideoResetRequested();
 }
 
 class CreateVideoVisibilityChanged extends CreateVideoEvent {
@@ -57,4 +45,20 @@ class CreateVideoUploadProgressChanged extends CreateVideoEvent {
 
   @override
   List<Object> get props => [progress];
+}
+
+class CreateVideoProductTagToggled extends CreateVideoEvent {
+  final Product product;
+  const CreateVideoProductTagToggled(this.product);
+
+  @override
+  List<Object?> get props => [product];
+}
+
+class CreateVideoProductsUpdated extends CreateVideoEvent {
+  final List<Product> products;
+  const CreateVideoProductsUpdated(this.products);
+
+  @override
+  List<Object?> get props => [products];
 }

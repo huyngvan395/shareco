@@ -1,6 +1,7 @@
 // features/video/domain/entities/video_entity.dart
 
 import '../../../../shared/domain/entities/base_entity.dart';
+import '../../../ecommerce/product/domain/entities/product.dart';
 
 class VideoEntity extends BaseEntity {
   final String authorId;
@@ -21,6 +22,7 @@ class VideoEntity extends BaseEntity {
   final int commentCount;
   final int shareCount;
   final int productTagCount;
+  final List<Product> taggedProducts;
   final DateTime? publishedAt;
 
   // Client-side computed
@@ -49,6 +51,7 @@ class VideoEntity extends BaseEntity {
     this.commentCount = 0,
     this.shareCount = 0,
     this.productTagCount = 0,
+    this.taggedProducts = const [],
     this.publishedAt,
     this.isLiked = false,
     this.isFollowingAuthor = false,
@@ -59,6 +62,7 @@ class VideoEntity extends BaseEntity {
     int? likeCount,
     int? commentCount,
     bool? isFollowingAuthor,
+    List<Product>? taggedProducts,
   }) =>
       VideoEntity(
         id: id,
@@ -81,7 +85,8 @@ class VideoEntity extends BaseEntity {
         likeCount: likeCount ?? this.likeCount,
         commentCount: commentCount ?? this.commentCount,
         shareCount: shareCount,
-        productTagCount: productTagCount,
+        productTagCount: taggedProducts != null ? taggedProducts.length : productTagCount,
+        taggedProducts: taggedProducts ?? this.taggedProducts,
         publishedAt: publishedAt,
         isLiked: isLiked ?? this.isLiked,
         isFollowingAuthor: isFollowingAuthor ?? this.isFollowingAuthor,
@@ -94,6 +99,8 @@ class VideoEntity extends BaseEntity {
     videoPath,
     likeCount,
     commentCount,
+    productTagCount,
+    taggedProducts,
     isLiked,
     isFollowingAuthor,
   ];

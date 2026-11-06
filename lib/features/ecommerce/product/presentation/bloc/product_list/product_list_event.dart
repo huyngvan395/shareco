@@ -12,14 +12,16 @@ class ProductListRequested extends ProductListEvent {
   final String? search;
   final String? categoryId;
   final String? brand;
+  final String? shopId;
 
   const ProductListRequested({
     this.limit = 20,
     this.search,
     this.categoryId,
     this.brand,
+    this.shopId,
   });
 
   @override
-  List<Object?> get props => [limit, search, categoryId, brand];
+  List<Object?> get props => [limit, search, categoryId, brand, shopId];
 }

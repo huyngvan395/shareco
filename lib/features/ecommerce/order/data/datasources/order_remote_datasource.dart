@@ -88,12 +88,62 @@ class OrderRemoteDataSourceImpl implements OrderRemoteDataSource {
     }
 
     try {
-      await SupabaseService.client.rpc(
-        'cancel_order',
-        params: {'p_order_id': orderId},
-      );
+      final beforeDetail = await getOrderDetail(orderId);
+      if (beforeDetail.status != 'pending') {
+        throw const ServerException('Only pending orders can be cancelled');
+      }
+
+      try {
+        await SupabaseService.client.rpc(
+          'cancel_order',
+          params: {'p_order_id': orderId},
+        );
+      } on PostgrestException {
+        await SupabaseService.from('orders')
+            .update({
+              'status': 'cancelled',
+              'cancelled_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', orderId)
+            .eq('buyer_id', userId);
+      }
+
+      // Restore variant stock, product stock, and sold_count safely
+      for (final item in beforeDetail.items) {
+        try {
+          if (item.variantId != null && item.variantId!.isNotEmpty) {
+            final varRes = await SupabaseService.from('product_variants')
+                .select('stock_qty')
+                .eq('id', item.variantId!)
+                .maybeSingle();
+            if (varRes != null) {
+              final curVarStock = (varRes['stock_qty'] as num?)?.toInt() ?? 0;
+              await SupabaseService.from('product_variants')
+                  .update({'stock_qty': curVarStock + item.qty})
+                  .eq('id', item.variantId!);
+            }
+          }
+          final prodRes = await SupabaseService.from('products')
+              .select('stock_total,sold_count')
+              .eq('id', item.productId)
+              .maybeSingle();
+          if (prodRes != null) {
+            final curStock = (prodRes['stock_total'] as num?)?.toInt() ?? 0;
+            final curSold = (prodRes['sold_count'] as num?)?.toInt() ?? 0;
+            await SupabaseService.from('products')
+                .update({
+                  'stock_total': curStock + item.qty,
+                  'sold_count': (curSold - item.qty).clamp(0, 999999999),
+                })
+                .eq('id', item.productId);
+          }
+        } catch (_) {}
+      }
+
       return getOrderDetail(orderId);
     } on AuthException {
+      rethrow;
+    } on ServerException {
       rethrow;
     } on PostgrestException catch (e) {
       throw ServerException(e.message);

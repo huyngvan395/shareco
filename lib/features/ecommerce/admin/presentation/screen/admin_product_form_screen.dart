@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_layout.dart';
+import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_ui_helpers.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_login_screen.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_bloc.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_event.dart';
@@ -182,12 +183,29 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         }
         _isLoadingDropdowns = false;
       });
-
-      if (_isEditMode) {
-        _loadProductForEdit();
-      }
     } catch (e) {
-      debugPrint('Lỗi tải dữ liệu metadata: $e');
+      debugPrint('Lỗi tải dữ liệu metadata, sử dụng dữ liệu dự phòng: $e');
+      setState(() {
+        _shopsList = AdminFallbackStore.shops
+            .map((s) => {'id': s['id'], 'shop_name': s['shop_name']})
+            .toList();
+        _categoriesList = [
+          {'id': '11111111-1111-1111-1111-111111111101', 'name': 'Mỹ phẩm & Chăm sóc da'},
+          {'id': '11111111-1111-1111-1111-111111111102', 'name': 'Trang điểm & Nước hoa'},
+          {'id': '11111111-1111-1111-1111-111111111103', 'name': 'Thời trang & Phụ kiện'},
+        ];
+        if (AdminSession.loggedInRole == 'shop') {
+          _selectedShopId = AdminSession.loggedInShopId;
+        } else if (_shopsList.isNotEmpty) {
+          _selectedShopId = _shopsList.first['id']?.toString();
+        }
+        _selectedCategoryId = _categoriesList.first['id']?.toString();
+        _isLoadingDropdowns = false;
+      });
+    }
+
+    if (_isEditMode) {
+      await _loadProductForEdit();
     }
   }
 
@@ -209,7 +227,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         _selectedShopId = p['shop_id'];
         _selectedCategoryId = p['category_id'];
 
-        // Load existing variants if any
         final vars = List<Map<String, dynamic>>.from(p['product_variants'] ?? []);
         _variants.clear();
         for (final v in vars) {
@@ -223,7 +240,20 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         }
       });
     } catch (e) {
-      debugPrint('Lỗi tải thông tin sản phẩm sửa: $e');
+      final fallback = AdminFallbackStore.products.where((p) => p.id == widget.productId).toList();
+      if (fallback.isNotEmpty) {
+        final p = fallback.first;
+        setState(() {
+          _titleCtrl.text = p.title;
+          _descCtrl.text = p.description ?? '';
+          _priceCtrl.text = p.priceMin.toStringAsFixed(0);
+          _originalPriceCtrl.text = p.originalPrice?.toStringAsFixed(0) ?? '';
+          _stockCtrl.text = p.stockTotal.toString();
+          _coverCtrl.text = p.coverPath ?? '';
+          _selectedShopId = p.shopId;
+          _selectedCategoryId = p.categoryId;
+        });
+      }
     }
   }
 
@@ -687,19 +717,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
 
                                           // Upload if there's a new picked cover
                                           if (_pickedCoverFile != null && _coverBytes != null) {
-                                            final filename = _pickedCoverFile!.name;
-                                            String ext = 'jpg';
-                                            if (filename.contains('.')) {
-                                              final parsedExt = filename.split('.').last.toLowerCase();
-                                              if (parsedExt == 'png' || parsedExt == 'jpg' || parsedExt == 'jpeg' || parsedExt == 'gif' || parsedExt == 'webp') {
-                                                ext = parsedExt;
-                                              }
-                                            }
-                                            final path = 'products/prod_${DateTime.now().millisecondsSinceEpoch}.$ext';
-                                            await Supabase.instance.client.storage
-                                                .from('avatars')
-                                                .uploadBinary(path, _coverBytes!, fileOptions: FileOptions(contentType: 'image/$ext'));
-                                            finalCoverUrl = Supabase.instance.client.storage.from('avatars').getPublicUrl(path);
+                                            finalCoverUrl = await AdminStorageHelper.uploadImage(
+                                              bytes: _coverBytes!,
+                                              originalFileName: _pickedCoverFile!.name,
+                                              prefix: 'product_cover',
+                                            );
                                           }
 
                                           if (!context.mounted) return;

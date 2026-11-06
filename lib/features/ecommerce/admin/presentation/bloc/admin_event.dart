@@ -44,6 +44,32 @@ class AdminUpdateShop extends AdminEvent {
   List<Object?> get props => [id, shopName, description, logoPath, coverPath];
 }
 
+class AdminToggleShopVerified extends AdminEvent {
+  final String shopId;
+  final bool isVerified;
+
+  const AdminToggleShopVerified({
+    required this.shopId,
+    required this.isVerified,
+  });
+
+  @override
+  List<Object?> get props => [shopId, isVerified];
+}
+
+class AdminToggleShopStatus extends AdminEvent {
+  final String shopId;
+  final String status;
+
+  const AdminToggleShopStatus({
+    required this.shopId,
+    required this.status,
+  });
+
+  @override
+  List<Object?> get props => [shopId, status];
+}
+
 class AdminFetchProducts extends AdminEvent {
   final String? shopId;
   const AdminFetchProducts({this.shopId});
@@ -76,7 +102,17 @@ class AdminCreateProduct extends AdminEvent {
   });
 
   @override
-  List<Object?> get props => [shopId, categoryId, title, description, price, originalPrice, stock, coverPath, variants];
+  List<Object?> get props => [
+        shopId,
+        categoryId,
+        title,
+        description,
+        price,
+        originalPrice,
+        stock,
+        coverPath,
+        variants,
+      ];
 }
 
 class AdminUpdateProduct extends AdminEvent {
@@ -103,7 +139,17 @@ class AdminUpdateProduct extends AdminEvent {
   });
 
   @override
-  List<Object?> get props => [productId, shopId, categoryId, title, description, price, originalPrice, stock, coverPath];
+  List<Object?> get props => [
+        productId,
+        shopId,
+        categoryId,
+        title,
+        description,
+        price,
+        originalPrice,
+        stock,
+        coverPath,
+      ];
 }
 
 class AdminDeleteProduct extends AdminEvent {
@@ -112,6 +158,19 @@ class AdminDeleteProduct extends AdminEvent {
 
   @override
   List<Object?> get props => [productId];
+}
+
+class AdminToggleProductStatus extends AdminEvent {
+  final String productId;
+  final String status;
+
+  const AdminToggleProductStatus({
+    required this.productId,
+    required this.status,
+  });
+
+  @override
+  List<Object?> get props => [productId, status];
 }
 
 class AdminFetchOrders extends AdminEvent {
@@ -131,3 +190,21 @@ class AdminUpdateOrderStatus extends AdminEvent {
   @override
   List<Object?> get props => [orderId, status];
 }
+
+class AdminFetchVideos extends AdminEvent {}
+
+class AdminUpdateVideoStatus extends AdminEvent {
+  final String videoId;
+  final String status; // 'draft' | 'published' | 'blocked' | 'deleted'
+
+  const AdminUpdateVideoStatus({
+    required this.videoId,
+    required this.status,
+  });
+
+  @override
+  List<Object?> get props => [videoId, status];
+}
+
+class AdminApproveAllPendingVideos extends AdminEvent {}
+

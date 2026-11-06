@@ -37,6 +37,7 @@ abstract class VideoRepository {
     required String thumbnailPath,   // local file path
     String? caption,
     String visibility = 'public',
+    List<String> taggedProductIds = const [],
     void Function(double progress)? onProgress, // 0.0 → 1.0
     // durationMs / width / height bỏ — datasource tự lấy từ Cloudinary response
   });

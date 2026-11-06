@@ -1,5 +1,6 @@
 // features/auth/data/datasources/auth_remote_datasources.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
 import '../../../../core/errors/exception.dart';
 import '../../../../core/services/supabase/index.dart';
@@ -42,10 +43,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on AuthException {
       rethrow;
     } on AuthApiException catch (e) {
-      print('AuthApiException: $e');
+      debugPrint('AuthApiException: $e');
       throw AuthException(e.message);
     } catch (e) {
-      print('ServerException: $e');
+      debugPrint('ServerException: $e');
       throw ServerException(e.toString());
     }
   }

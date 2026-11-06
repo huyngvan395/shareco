@@ -84,6 +84,7 @@ class VideoRepositoryImpl implements VideoRepository {
     required String thumbnailPath,
     String? caption,
     String visibility = 'public',
+    List<String> taggedProductIds = const [],
     void Function(double progress)? onProgress, // 👈 thêm
     // Bỏ durationMs / width / height vì datasource không cần nữa
   }) async {
@@ -98,6 +99,7 @@ class VideoRepositoryImpl implements VideoRepository {
         localThumbnailPath: thumbnailPath,
         caption: caption ?? '',
         visibility: visibility,
+        taggedProductIds: taggedProductIds,
         onProgress: onProgress,
       );
 

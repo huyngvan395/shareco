@@ -6,13 +6,10 @@ import 'package:dartz/dartz.dart';
 import 'package:shareco/core/services/cloudinary/cloudinary_service.dart';
 import '../../../../core/errors/exception.dart';
 import '../../../../core/errors/failure.dart';
-import '../../../../core/services/supabase/index.dart';
-import '../../../../shared/data/models/profile_stub_model.dart';
 import '../../../../shared/domain/entities/base_entity.dart';
 import '../../domain/entities/chat_entities.dart';
 import '../../domain/repositories/chat_repository.dart';
 import '../datasources/chat_remote_datasource.dart';
-import '../models/chat_models.dart';
 
 class ChatRepositoryImpl implements ChatRepository {
   final ChatRemoteDataSource remote;

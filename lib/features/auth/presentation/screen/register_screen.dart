@@ -11,7 +11,6 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/validators/validators.dart';
 import '../../../../core/widgets/button.dart';
 import '../../../../core/widgets/text_field.dart';
-import '../../../../core/widgets/text_logo.dart';
 import '../bloc/register/register_bloc.dart';
 import '../bloc/register/register_event.dart';
 import '../bloc/register/register_state.dart';

@@ -1,7 +1,6 @@
 // features/auth/data/repositories/auth_repository_impl.dart
 
 import 'package:dartz/dartz.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
 import '../../../../core/errors/exception.dart';
 import '../../../../core/errors/failure.dart';
 import '../../domain/entities/auth_session.dart';

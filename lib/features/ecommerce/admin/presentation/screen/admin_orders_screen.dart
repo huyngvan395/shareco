@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/widgets/admin_layout.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_login_screen.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_bloc.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_event.dart';
-import 'package:shareco/features/ecommerce/admin/presentation/bloc/admin_state.dart';
 import 'package:shareco/features/ecommerce/order/domain/entities/ecommerce_order.dart';
+import '../bloc/admin_bloc.dart';
+import '../bloc/admin_event.dart';
+import '../bloc/admin_state.dart';
+import '../widgets/admin_layout.dart';
+import '../widgets/admin_ui_helpers.dart';
+import 'admin_login_screen.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});
@@ -15,506 +15,756 @@ class AdminOrdersScreen extends StatefulWidget {
   State<AdminOrdersScreen> createState() => _AdminOrdersScreenState();
 }
 
-class _AdminOrdersScreenState extends State<AdminOrdersScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  late AdminBloc _adminBloc;
-  RealtimeChannel? _ordersSubscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 7, vsync: this);
-
-    final shopId = AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
-    _adminBloc = AdminBloc()..add(AdminFetchOrders(shopId: shopId));
-
-    _ordersSubscription = Supabase.instance.client
-        .channel('public:orders')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'orders',
-          callback: (payload) {
-            _adminBloc.add(AdminFetchOrders(shopId: shopId));
-          },
-        )
-        .subscribe();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    if (_ordersSubscription != null) {
-      Supabase.instance.client.removeChannel(_ordersSubscription!);
-    }
-    _adminBloc.close();
-    super.dispose();
-  }
+class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
+  String _searchQuery = '';
+  String _filterStatus = 'all';
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _adminBloc,
+    final currentShopId =
+        AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
+
+    return BlocProvider(
+      create: (_) => AdminBloc()..add(AdminFetchOrders(shopId: currentShopId)),
       child: BlocConsumer<AdminBloc, AdminState>(
         listener: (context, state) {
           if (state.status == AdminStatus.failure && state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.errorMessage!), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(state.errorMessage!),
+                backgroundColor: AdminPalette.danger,
+              ),
             );
           }
         },
         builder: (context, state) {
-          final isPlatformAdmin = AdminSession.loggedInRole == 'admin';
+          final allOrders = state.orders;
+          final totalRevenue = allOrders
+              .where((o) => o.status != 'cancelled')
+              .fold<double>(0, (sum, o) => sum + o.totalAmount);
+          final pendingCount = allOrders
+              .where((o) => o.status == 'pending' || o.status == 'confirmed')
+              .length;
+          final completedCount = allOrders
+              .where((o) => o.status == 'completed' || o.status == 'shipping')
+              .length;
+
+          final filteredOrders = allOrders.where((o) {
+            final q = _searchQuery.trim().toLowerCase();
+            final recipient =
+                (o.addressSnapshot['recipient_name'] ?? '').toString().toLowerCase();
+            final phone = (o.addressSnapshot['phone'] ?? '').toString().toLowerCase();
+            final matchesSearch = q.isEmpty ||
+                o.orderCode.toLowerCase().contains(q) ||
+                recipient.contains(q) ||
+                phone.contains(q);
+
+            if (!matchesSearch) return false;
+            if (_filterStatus == 'all') return true;
+            return o.status == _filterStatus;
+          }).toList();
+
           return AdminLayout(
-            title: isPlatformAdmin ? 'Quản lý Đơn hàng Toàn hệ thống 🧾' : 'Quản lý Đơn hàng bán của tôi 🧾',
+            title: AdminSession.loggedInRole == 'shop'
+                ? 'Quản Lý Đơn Hàng Khách Đặt'
+                : 'Quản Lý Vận Đơn Toàn Hệ Thống',
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Horizontal Tabs controller
-                Container(
-                  color: Colors.white,
-                  child: TabBar(
-                    controller: _tabController,
-                    labelColor: const Color(0xFF6200EE),
-                    unselectedLabelColor: Colors.black54,
-                    indicatorColor: const Color(0xFF6200EE),
-                    indicatorWeight: 3,
-                    isScrollable: true,
-                    tabs: const [
-                      Tab(text: 'TẤT CẢ'),
-                      Tab(text: 'CHỜ XỬ LÝ (PENDING)'),
-                      Tab(text: 'ĐANG ĐÓNG GÓI (PACKED)'),
-                      Tab(text: 'ĐANG GIAO (SHIPPING)'),
-                      Tab(text: 'ĐÃ HOÀN THÀNH (COMPLETED)'),
-                      Tab(text: 'HOÀN TIỀN (REFUNDED)'),
-                      Tab(text: 'ĐÃ HỦY (CANCELLED)'),
-                    ],
+              // 4 KPI Summary Cards
+              Row(
+                children: [
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Tổng Đơn Hàng',
+                      value: '${allOrders.length}',
+                      subtitle: 'Đơn đặt mua trên toàn hệ thống',
+                      icon: Icons.receipt_long_rounded,
+                      color: AdminPalette.primary,
+                    ),
                   ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Tổng Doanh Thu (GMV)',
+                      value: AdminFormatters.formatVnd(totalRevenue),
+                      subtitle: 'Không tính đơn đã hủy',
+                      icon: Icons.payments_rounded,
+                      color: AdminPalette.success,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Chờ Xử Lý / Đóng Gói',
+                      value: '$pendingCount',
+                      subtitle: 'Cần xác nhận giao vận',
+                      icon: Icons.pending_actions_rounded,
+                      color: AdminPalette.warning,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: AdminKpiCard(
+                      title: 'Đang Giao & Hoàn Tất',
+                      value: '$completedCount',
+                      subtitle: 'Đơn hàng vận hành thành công',
+                      icon: Icons.local_shipping_rounded,
+                      color: AdminPalette.info,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Search & Status Filter Bar
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AdminPalette.border),
                 ),
-                const SizedBox(height: 24),
-                // Orders Display Area
-                Expanded(
-                  child: state.status == AdminStatus.loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _buildOrdersList(context, state.orders, null),
-                            _buildOrdersList(context, state.orders, 'pending'),
-                            _buildOrdersList(context, state.orders, 'packed'),
-                            _buildOrdersList(context, state.orders, 'shipping'),
-                            _buildOrdersList(context, state.orders, 'completed'),
-                            _buildOrdersList(context, state.orders, 'refunded'),
-                            _buildOrdersList(context, state.orders, 'cancelled'),
-                          ],
-                        ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildOrdersList(BuildContext context, List<EcommerceOrder> orders, String? filterStatus) {
-    final filtered = filterStatus == null
-        ? orders
-        : orders.where((o) => o.status.toLowerCase() == filterStatus.toLowerCase()).toList();
-
-    if (filtered.isEmpty) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[300]),
-                const SizedBox(height: 16),
-                const Text(
-                  'Không tìm thấy đơn hàng nào thuộc bộ lọc này.',
-                  style: TextStyle(color: Colors.black45, fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: filtered.length,
-      itemBuilder: (context, index) {
-        final o = filtered[index];
-        return _buildOrderCard(context, o);
-      },
-    );
-  }
-
-  Widget _buildOrderCard(BuildContext context, EcommerceOrder o) {
-    final formattedTotal = o.totalAmount.toStringAsFixed(0).replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
-        );
-
-    final address = o.addressSnapshot;
-    final String fullName = address['fullName'] ?? address['full_name'] ?? 'Khách mua';
-    final String phone = address['phone'] ?? '';
-    final String addressLine = address['addressLine'] ?? address['address_line'] ?? '';
-    final String ward = address['ward'] ?? '';
-    final String district = address['district'] ?? '';
-    final String province = address['province'] ?? '';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Row 1: Code, Status, Date
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
+                child: Row(
                   children: [
-                    Text(
-                      'MÃ ĐƠN: #${o.orderCode}',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black87),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6200EE).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 44,
+                        child: TextField(
+                          onChanged: (v) => setState(() => _searchQuery = v),
+                          decoration: InputDecoration(
+                            hintText: 'Tìm theo mã đơn hàng (#SHC...), tên người nhận hoặc SĐT...',
+                            hintStyle: const TextStyle(
+                              fontSize: 13,
+                              color: AdminPalette.textSecondary,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 20,
+                              color: AdminPalette.textSecondary,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: AdminPalette.border),
+                            ),
+                          ),
+                        ),
                       ),
-                      child: Text(
-                        o.shopName ?? 'Gian hàng',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6200EE)),
-                      ),
                     ),
+                    const SizedBox(width: 14),
+                    _buildFilterPill('Tất cả (${allOrders.length})', 'all'),
+                    const SizedBox(width: 8),
+                    _buildFilterPill('Chờ duyệt', 'pending'),
+                    const SizedBox(width: 8),
+                    _buildFilterPill('Đang giao', 'shipping'),
+                    const SizedBox(width: 8),
+                    _buildFilterPill('Hoàn thành', 'completed'),
+                    const SizedBox(width: 8),
+                    _buildFilterPill('Đã hủy', 'cancelled'),
                   ],
                 ),
-                _buildOrderStatusBadge(o.status),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 12),
-            // Row 2: Customer details, address, payment
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Customer details
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('THÔNG TIN GIAO NHẬN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black38)),
-                      const SizedBox(height: 8),
-                      Text('$fullName | $phone', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 13)),
-                      const SizedBox(height: 4),
-                      Text('$addressLine, $ward, $district, $province', style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                // Payment Method & Total Price
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('HÓA ĐƠN & THANH TOÁN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black38)),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tổng hóa đơn: $formattedTotalđ',
-                        style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.red, fontSize: 14),
-                      ),
-                      const SizedBox(height: 4),
-                      Builder(builder: (context) {
-                        final paymentMethod = o.addressSnapshot['payment_method'] as String? ?? 'cod';
-                        String ptttLabel = 'Thanh toán COD';
-                        bool isPaid = false;
-                        if (paymentMethod == 'card') {
-                          ptttLabel = 'Thẻ Visa/Mastercard';
-                          isPaid = true;
-                        } else if (paymentMethod == 'qr') {
-                          ptttLabel = 'QR Chuyển khoản';
-                          isPaid = true;
-                        }
+              ),
+              const SizedBox(height: 16),
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('PTTT: $ptttLabel', style: TextStyle(fontSize: 11, color: Colors.grey[700], fontWeight: FontWeight.bold)),
-                            if (isPaid) ...[
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.green.shade200),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.check_circle_outline, size: 12, color: Colors.green.shade700),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'ĐÃ THANH TOÁN',
-                                      style: TextStyle(color: Colors.green.shade700, fontSize: 9, fontWeight: FontWeight.bold),
+              // Main Orders Table
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AdminPalette.border),
+                  ),
+                  child: state.status == AdminStatus.loading && allOrders.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : filteredOrders.isEmpty
+                          ? _buildEmptyState()
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: SingleChildScrollView(
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: DataTable(
+                                    headingRowColor: WidgetStateProperty.all(
+                                      const Color(0xFFF8FAFC),
                                     ),
-                                  ],
+                                    headingRowHeight: 50,
+                                    dataRowMinHeight: 74,
+                                    dataRowMaxHeight: 82,
+                                    horizontalMargin: 24,
+                                    columnSpacing: 22,
+                                    columns: const [
+                                      DataColumn(
+                                        label: Text(
+                                          'MÃ ĐƠN HÀNG',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'KHÁCH HÀNG & LIÊN HỆ',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'SẢN PHẨM ĐẶT MUA',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'TỔNG THANH TOÁN',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'TRẠNG THÁI VẬN ĐƠN',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'CHI TIẾT',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12,
+                                            color: AdminPalette.textSecondary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    rows: filteredOrders.map((order) {
+                                      final recipient =
+                                          order.addressSnapshot['recipient_name'] ??
+                                              'Khách hàng ShareCo';
+                                      final phone =
+                                          order.addressSnapshot['phone'] ?? 'Chưa cập nhật';
+                                      final firstItem = order.items.isNotEmpty
+                                          ? order.items.first.title
+                                          : 'Đơn hàng sản phẩm';
+
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: AdminPalette.primary
+                                                        .withValues(alpha: 0.08),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    '#${order.orderCode}',
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w800,
+                                                      color: AdminPalette.primary,
+                                                      fontSize: 12.5,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  AdminFormatters.formatDateTime(
+                                                    order.placedAt,
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontSize: 11,
+                                                    color: AdminPalette.textSecondary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  recipient.toString(),
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13.5,
+                                                    color: AdminPalette.textPrimary,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  phone.toString(),
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    color: AdminPalette.textSecondary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          DataCell(
+                                            SizedBox(
+                                              width: 230,
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    firstItem,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 13,
+                                                      color: AdminPalette.textPrimary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    'Tổng: ${order.items.length} mặt hàng',
+                                                    style: const TextStyle(
+                                                      fontSize: 11.5,
+                                                      color: AdminPalette.textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              AdminFormatters.formatVnd(order.totalAmount),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                color: AdminPalette.danger,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          DataCell(
+                                            _buildStatusDropdown(context, order),
+                                          ),
+                                          DataCell(
+                                            OutlinedButton.icon(
+                                              onPressed: () =>
+                                                  _showOrderDetailsModal(context, order),
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor: AdminPalette.primary,
+                                                side: const BorderSide(
+                                                  color: AdminPalette.border,
+                                                ),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 8,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.visibility_outlined,
+                                                size: 16,
+                                              ),
+                                              label: const Text(
+                                                'Xem đơn',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
                                 ),
                               ),
-                            ],
-                          ],
-                        );
-                      }),
-                    ],
-                  ),
+                            ),
                 ),
-                // Actions Buttons
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => _showOrderDetailsModal(context, o),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade50,
-                          foregroundColor: Colors.blue.shade700,
-                          elevation: 0,
-                          minimumSize: const Size(120, 36),
-                        ),
-                        child: const Text('Xem sản phẩm', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildStateActionButton(context, o),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFilterPill(String label, String value) {
+    final selected = _filterStatus == value;
+    return InkWell(
+      onTap: () => setState(() => _filterStatus = value),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? AdminPalette.primary.withValues(alpha: 0.1)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AdminPalette.primary : AdminPalette.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? AdminPalette.primary : AdminPalette.textSecondary,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            fontSize: 12.5,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildOrderStatusBadge(String status) {
-    Color bg = Colors.amber.shade50;
-    Color border = Colors.amber.shade200;
-    Color text = Colors.amber.shade700;
-    String label = 'Đang chờ xử lý';
-
-    switch (status.toLowerCase()) {
-      case 'packed':
-        bg = Colors.orange.shade50;
-        border = Colors.orange.shade200;
-        text = Colors.orange.shade700;
-        label = 'Đang đóng gói';
-        break;
-      case 'shipping':
-        bg = Colors.blue.shade50;
-        border = Colors.blue.shade200;
-        text = Colors.blue.shade700;
-        label = 'Đang vận chuyển';
-        break;
-      case 'completed':
-        bg = Colors.green.shade50;
-        border = Colors.green.shade200;
-        text = Colors.green.shade700;
-        label = 'Đã hoàn thành';
-        break;
-      case 'refunded':
-        bg = Colors.purple.shade50;
-        border = Colors.purple.shade200;
-        text = Colors.purple.shade700;
-        label = 'Đã hoàn tiền';
-        break;
-      case 'cancelled':
-        bg = Colors.red.shade50;
-        border = Colors.red.shade200;
-        text = Colors.red.shade700;
-        label = 'Đã hủy đơn';
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildStateActionButton(BuildContext context, EcommerceOrder o) {
-    final status = o.status.toLowerCase();
-
-    if (status == 'pending') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          ElevatedButton(
-            onPressed: () {
-              context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'packed'));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Đơn hàng #${o.orderCode} đã được xác nhận và đang đóng gói'), backgroundColor: Colors.orange),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(140, 36),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
             ),
-            child: const Text('Xác nhận & Đóng gói', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              size: 48,
+              color: AdminPalette.textSecondary,
+            ),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () {
-              context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'cancelled'));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Đơn hàng #${o.orderCode} đã bị hủy!'), backgroundColor: Colors.red),
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              minimumSize: const Size(140, 32),
+          const SizedBox(height: 16),
+          const Text(
+            'Không có đơn hàng nào trong danh mục này',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AdminPalette.textPrimary,
             ),
-            child: const Text('Hủy đơn hàng', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Đơn hàng mới khách đặt từ App sẽ tự động đồng bộ về đây.',
+            style: TextStyle(color: AdminPalette.textSecondary, fontSize: 13),
           ),
         ],
-      );
-    }
-
-    if (status == 'packed') {
-      return ElevatedButton(
-        onPressed: () {
-          context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'shipping'));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Đơn hàng #${o.orderCode} đã bàn giao cho đơn vị vận chuyển'), backgroundColor: Colors.blue),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(140, 36),
-        ),
-        child: const Text('Giao cho shipper', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-      );
-    }
-
-    if (status == 'shipping') {
-      return ElevatedButton(
-        onPressed: () {
-          context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'completed'));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Đơn hàng #${o.orderCode} đã được giao thành công!'), backgroundColor: Colors.green),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(140, 36),
-        ),
-        child: const Text('Hoàn tất giao hàng', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-      );
-    }
-
-    if (status == 'completed') {
-      return OutlinedButton(
-        onPressed: () {
-          context.read<AdminBloc>().add(AdminUpdateOrderStatus(orderId: o.id, status: 'refunded'));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Đã cập nhật trạng thái đơn hàng #${o.orderCode} thành Hoàn tiền'), backgroundColor: Colors.purple),
-          );
-        },
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.purple,
-          side: const BorderSide(color: Colors.purple),
-          minimumSize: const Size(140, 32),
-        ),
-        child: const Text('Hoàn tiền đơn', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-      );
-    }
-
-    return const SizedBox.shrink();
+      ),
+    );
   }
 
-  void _showOrderDetailsModal(BuildContext parentContext, EcommerceOrder o) {
-    showDialog(
-      context: parentContext,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Chi tiết sản phẩm đặt mua: Đơn #${o.orderCode}', style: const TextStyle(fontWeight: FontWeight.w900)),
-          content: Container(
-            width: 600,
-            constraints: const BoxConstraints(maxHeight: 400),
-            child: ListView.separated(
-              itemCount: o.items.length,
-              separatorBuilder: (_, __) => const Divider(),
-              itemBuilder: (context, index) {
-                final item = o.items[index];
-                final price = item.unitPrice.toStringAsFixed(0).replaceAllMapped(
-                      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                      (Match m) => '${m[1]}.',
-                    );
-                final total = item.lineTotal.toStringAsFixed(0).replaceAllMapped(
-                      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                      (Match m) => '${m[1]}.',
-                    );
+  Widget _buildStatusDropdown(BuildContext context, EcommerceOrder order) {
+    final statusMap = {
+      'pending': {'label': 'Chờ xác nhận', 'color': AdminPalette.warning},
+      'confirmed': {'label': 'Đã xác nhận', 'color': AdminPalette.info},
+      'shipping': {'label': 'Đang giao hàng', 'color': AdminPalette.accent},
+      'completed': {'label': 'Hoàn thành', 'color': AdminPalette.success},
+      'cancelled': {'label': 'Đã hủy', 'color': AdminPalette.danger},
+    };
 
-                return ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      item.imagePath ?? 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=100',
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 48,
-                        height: 48,
-                        color: Colors.grey.shade100,
-                        child: const Icon(Icons.image, color: Colors.grey),
-                      ),
+    final currentStatus =
+        statusMap.containsKey(order.status) ? order.status : 'pending';
+    final color = statusMap[currentStatus]!['color'] as Color;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: currentStatus,
+          isDense: true,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: color, size: 18),
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+          items: statusMap.entries.map((entry) {
+            final itemColor = entry.value['color'] as Color;
+            return DropdownMenuItem<String>(
+              value: entry.key,
+              child: Text(
+                entry.value['label'] as String,
+                style: TextStyle(
+                  color: itemColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (newStatus) {
+            if (newStatus != null && newStatus != currentStatus) {
+              context.read<AdminBloc>().add(
+                    AdminUpdateOrderStatus(
+                      orderId: order.id,
+                      status: newStatus,
+                    ),
+                  );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Đã cập nhật đơn #${order.orderCode} sang "${statusMap[newStatus]!['label']}"',
+                  ),
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showOrderDetailsModal(BuildContext context, EcommerceOrder order) {
+    final address = order.addressSnapshot;
+    final fullAddress = [
+      address['line1'],
+      address['ward'],
+      address['district'],
+      address['province'],
+    ].where((s) => s != null && s.toString().isNotEmpty).join(', ');
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AdminPalette.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long_rounded,
+                      color: AdminPalette.primary,
+                      size: 20,
                     ),
                   ),
-                  title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  subtitle: Text(
-                    'Phân loại: ${item.variantName ?? 'Tiêu chuẩn'} | Số lượng: x${item.qty}',
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Chi Tiết Đơn Hàng #${order.orderCode}',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
                   ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                ],
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(ctx),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Shipping Info Box
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AdminPalette.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.local_shipping_outlined,
+                              size: 17,
+                              color: AdminPalette.primary,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'THÔNG TIN NGƯỜI NHẬN HÀNG',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                color: AdminPalette.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Người nhận: ${address['recipient_name'] ?? 'N/A'}  •  SĐT: ${address['phone'] ?? 'N/A'}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Địa chỉ giao: ${fullAddress.isEmpty ? 'Chưa cung cấp' : fullAddress}',
+                          style: const TextStyle(
+                            color: AdminPalette.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (order.note != null && order.note!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Ghi chú: "${order.note}"',
+                            style: const TextStyle(
+                              fontStyle: FontStyle.italic,
+                              color: AdminPalette.warning,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'DANH SÁCH SẢN PHẨM ĐẶT MUA',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      color: AdminPalette.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...order.items.map((item) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: AdminPalette.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              color: const Color(0xFFF1F5F9),
+                              image: item.imagePath != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(item.imagePath!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: item.imagePath == null
+                                ? const Icon(Icons.shopping_bag_outlined)
+                                : null,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Phân loại: ${item.variantName ?? 'Tiêu chuẩn'}  •  SL: x${item.qty}',
+                                  style: const TextStyle(
+                                    color: AdminPalette.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            AdminFormatters.formatVnd(item.lineTotal),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: AdminPalette.danger,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const Divider(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('$totalđ', style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.red, fontSize: 13)),
-                      Text('$priceđ / chiếc', style: const TextStyle(fontSize: 10, color: Colors.black38)),
+                      const Text(
+                        'Tổng giá trị thanh toán:',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        AdminFormatters.formatVnd(order.totalAmount),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: AdminPalette.danger,
+                        ),
+                      ),
                     ],
                   ),
-                );
-              },
+                ],
+              ),
             ),
           ),
           actions: [
             ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6200EE), foregroundColor: Colors.white),
-              child: const Text('Đóng', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AdminPalette.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Đóng'),
             ),
           ],
         );

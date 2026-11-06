@@ -7,62 +7,12 @@ import 'package:shareco/core/navigation/app_route_observer.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_event.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_state.dart';
 import 'package:shareco/routes/app_router.dart';
-import 'package:video_player/video_player.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/storage_image.dart';
+import '../../../../core/utils/video_controller_cache.dart';
 import '../../../video/domain/entities/video_entity.dart';
 import '../bloc/feed_bloc.dart';
 import '../widgets/feed_topbar.dart';
 import '../widgets/video_item.dart';
-
-// ─── Video Controller Cache ────────────────────────────────────────────────────
-
-class _VideoCache {
-  final Map<String, VideoPlayerController> _cache = {};
-  final Map<String, Future<VideoPlayerController>> _pending = {};
-  static const _max = 5;
-
-  Future<VideoPlayerController> getOrCreate(String path) async {
-    final url = StorageImage.videoUrl(path);
-    if (_cache.containsKey(url)) return _cache[url]!;
-    if (_pending.containsKey(url)) return _pending[url]!;
-
-    final future = _create(url);
-    _pending[url] = future;
-    return future;
-  }
-
-  Future<VideoPlayerController> _create(String url) async {
-    if (_cache.length >= _max) {
-      final old = _cache.keys.first;
-      await _cache[old]?.dispose();
-      _cache.remove(old);
-    }
-    final ctrl = VideoPlayerController.networkUrl(
-      Uri.parse(url),
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-    );
-    await ctrl.initialize();
-    ctrl.setLooping(true);
-    _cache[url] = ctrl;
-    _pending.remove(url);
-    return ctrl;
-  }
-
-  void pauseAll() {
-    for (final c in _cache.values) {
-      c.pause();
-    }
-  }
-
-  Future<void> disposeAll() async {
-    for (final c in _cache.values) {
-      await c.dispose();
-    }
-    _cache.clear();
-    _pending.clear();
-  }
-}
 
 // ─── Feed Screen ──────────────────────────────────────────────────────────────
 
@@ -75,13 +25,12 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
-  final _cache = _VideoCache();
+  final _cache = VideoControllerCache();
   final _pageCtrl = PageController();
   int _activePage = 0;
   bool _hasScrolledToTarget = false;
   late final GoRouter _router;
   bool _routerListenerAdded = false;
-  bool _routeAwareSubscribed = false;
   bool _isFeedVisible = true;
 
   @override
@@ -107,6 +56,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    routeObserver.removeRouteListener(_onNavigationEvent);
     if (_routerListenerAdded) {
       _router.routerDelegate.removeListener(_onRouteChanged);
     }
@@ -174,12 +124,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     final state = context.read<FeedBloc>().state;
     if (state is! FeedLoaded || _activePage >= state.videos.length) return;
 
-    final ctrl = await _cache.getOrCreate(
-      state.videos[_activePage].videoPath,
-    );
-    if (ctrl.value.isInitialized) {
-      await ctrl.play();
-    }
+    try {
+      final ctrl = await _cache.getOrCreate(
+        state.videos[_activePage].videoPath,
+      );
+      if (!mounted || !_isFeedVisible) return;
+      if (ctrl.value.isInitialized) {
+        await ctrl.play();
+      }
+    } catch (_) {}
   }
 
   void _onPageChanged(int page) {

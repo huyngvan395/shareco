@@ -72,6 +72,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              actions: [
+                IconButton(
+                  tooltip: 'Giỏ hàng',
+                  icon: const Icon(Icons.shopping_cart_outlined),
+                  onPressed: () {
+                    context.requireAuth(() => context.push('/cart'));
+                  },
+                ),
+              ],
             ),
             body: _buildBody(state, selectedVariant),
             bottomNavigationBar: product == null
@@ -80,19 +89,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     product: product,
                     selectedVariant: selectedVariant,
                     isLoading: _isAddingToCart,
+                    onOpenShop: product.shopId.isNotEmpty
+                        ? () => context.push('/shop/${product.shopId}')
+                        : null,
                     onAddToCart: () {
                       context.requireAuth(
                         () => _addToCart(product, selectedVariant),
                       );
                     },
                     onBuyNow: () {
-                      context.requireAuth(
-                        () => context.push('/checkout', extra: DirectOrderArgs(
-                          product: product,
-                          selectedVariant: selectedVariant,
-                          qty: 1,
-                        )),
-                      );
+                      context.requireAuth(() async {
+                        await context.push(
+                          '/checkout',
+                          extra: DirectOrderArgs(
+                            product: product,
+                            selectedVariant: selectedVariant,
+                            qty: 1,
+                          ),
+                        );
+                        if (mounted) {
+                          _bloc.add(ProductDetailRequested(widget.productId));
+                        }
+                      });
                     },
                   ),
           );
@@ -202,7 +220,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       },
       (_) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã thêm vào giỏ hàng')),
+          SnackBar(
+            content: const Text('Đã thêm vào giỏ hàng'),
+            action: SnackBarAction(
+              label: 'Xem giỏ',
+              onPressed: () => context.push('/cart'),
+            ),
+          ),
         );
       },
     );
@@ -256,60 +280,78 @@ class _ProductInfo extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSizes.md),
-          Row(
-            children: [
-              const Icon(Icons.storefront_outlined, size: 18),
-              const SizedBox(width: AppSizes.xs),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    context.push('/shop/${product.shopId}');
-                  },
-                  child: Text(
-                    product.shopName ?? 'Shop',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+          InkWell(
+            onTap: product.shopId.isNotEmpty
+                ? () => context.push('/shop/${product.shopId}')
+                : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.black12),
               ),
-              const SizedBox(width: AppSizes.sm),
-              Text(
-                'Đã bán ${product.soldCount}',
-                style: const TextStyle(color: Colors.black54),
-              ),
-            ],
-          ),
-          if (product.brand != null && product.brand!.trim().isNotEmpty) ...[
-            const SizedBox(height: AppSizes.sm),
-            GestureDetector(
-              onTap: () {
-                context.push('/shop/${product.shopId}');
-              },
               child: Row(
                 children: [
-                  const Icon(Icons.verified_outlined, color: Color(0xFFEE4D2D), size: 18),
-                  const SizedBox(width: AppSizes.xs),
-                  const Text(
-                    'Thương hiệu: ',
-                    style: TextStyle(color: Colors.black54, fontSize: 14),
+                  const Icon(
+                    Icons.storefront_outlined,
+                    size: 20,
+                    color: Color(0xFFEE4D2D),
                   ),
-                  Text(
-                    product.brand!,
-                    style: const TextStyle(
-                      color: Color(0xFFEE4D2D),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                  const SizedBox(width: AppSizes.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.shopName ?? product.brand ?? 'Shop chính hãng',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (product.brand != null &&
+                            product.brand!.trim().isNotEmpty)
+                          Text(
+                            'Thương hiệu: ${product.brand!}',
+                            style: const TextStyle(
+                              color: Color(0xFFEE4D2D),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                  if (product.shopId.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFEAE6),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFEE4D2D)),
+                      ),
+                      child: const Text(
+                        'Xem Shop',
+                        style: TextStyle(
+                          color: Color(0xFFEE4D2D),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-          ],
-          const SizedBox(height: AppSizes.sm),
+          ),
+          const SizedBox(height: AppSizes.md),
           Row(
             children: [
               const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
@@ -318,7 +360,12 @@ class _ProductInfo extends StatelessWidget {
                 '${product.ratingAvg.toStringAsFixed(1)} (${product.ratingCount})',
                 style: const TextStyle(color: Colors.black54),
               ),
-              const SizedBox(width: AppSizes.lg),
+              const SizedBox(width: AppSizes.md),
+              Text(
+                'Đã bán ${product.soldCount}',
+                style: const TextStyle(color: Colors.black54),
+              ),
+              const Spacer(),
               Icon(
                 _isInStock
                     ? Icons.inventory_2_outlined
@@ -328,9 +375,10 @@ class _ProductInfo extends StatelessWidget {
               ),
               const SizedBox(width: AppSizes.xs),
               Text(
-                _isInStock ? '$_stockQty sản phẩm có sẵn' : 'Hết hàng',
+                _isInStock ? 'Còn $_stockQty' : 'Hết hàng',
                 style: TextStyle(
                   color: _isInStock ? Colors.green : AppColors.error,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -396,6 +444,7 @@ class _ProductActionBar extends StatelessWidget {
   final Product product;
   final ProductVariant? selectedVariant;
   final bool isLoading;
+  final VoidCallback? onOpenShop;
   final VoidCallback onAddToCart;
   final VoidCallback onBuyNow;
 
@@ -403,6 +452,7 @@ class _ProductActionBar extends StatelessWidget {
     required this.product,
     required this.selectedVariant,
     required this.isLoading,
+    this.onOpenShop,
     required this.onAddToCart,
     required this.onBuyNow,
   });
@@ -419,14 +469,43 @@ class _ProductActionBar extends StatelessWidget {
         ),
         child: Row(
           children: [
+            if (onOpenShop != null) ...[
+              InkWell(
+                onTap: onOpenShop,
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.storefront_outlined,
+                        color: Colors.black87,
+                        size: 22,
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Cửa hàng',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSizes.sm),
+            ],
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _canBuy && !isLoading ? onAddToCart : null,
                 icon: const Icon(Icons.add_shopping_cart_outlined),
-                label: Text(isLoading ? 'Đang thêm...' : 'Thêm vào giỏ'),
+                label: Text(isLoading ? 'Đang thêm...' : 'Thêm giỏ'),
               ),
             ),
-            const SizedBox(width: AppSizes.md),
+            const SizedBox(width: AppSizes.sm),
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: _canBuy && !isLoading ? onBuyNow : null,

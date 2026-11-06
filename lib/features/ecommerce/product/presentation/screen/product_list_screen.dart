@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/constants/app_sizes.dart';
+import '../../../../../core/utils/storage_image.dart';
 import '../../../../../di/injector.dart';
 import '../../../cart/presentation/bloc/cart_bloc.dart';
 import '../../../cart/presentation/bloc/cart_event.dart';
@@ -42,20 +43,31 @@ class _ProductListScreenState extends State<ProductListScreen> {
   File? _scannedImageFile;
   Future<String?>? _analysisFuture;
   String? _aiSearchKeyword;
+  String? _selectedBrand;
+  String? _selectedShopId;
+  int _activeTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _bloc = sl<ProductListBloc>()..add(ProductListRequested(brand: widget.brand));
+    _selectedBrand = widget.brand;
+    _bloc = sl<ProductListBloc>()
+      ..add(ProductListRequested(brand: _selectedBrand));
     _cartBloc = sl<CartBloc>()..add(const CartRequested());
-    _searchCtrl.addListener(() => setState(() {}));
   }
 
   @override
   void didUpdateWidget(covariant ProductListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.brand != widget.brand) {
-      _bloc.add(ProductListRequested(brand: widget.brand, search: _searchCtrl.text.trim()));
+      _selectedBrand = widget.brand;
+      _selectedShopId = null;
+      _bloc.add(
+        ProductListRequested(
+          brand: _selectedBrand,
+          search: _searchCtrl.text.trim(),
+        ),
+      );
     }
   }
 
@@ -68,7 +80,27 @@ class _ProductListScreenState extends State<ProductListScreen> {
   }
 
   void _loadProducts({String? search}) {
-    _bloc.add(ProductListRequested(search: search, brand: widget.brand));
+    _bloc.add(
+      ProductListRequested(
+        search: search,
+        brand: _selectedBrand,
+        shopId: _selectedShopId,
+      ),
+    );
+  }
+
+  void _onSelectBrand(String? brand, String? shopId) {
+    setState(() {
+      _selectedBrand = brand;
+      _selectedShopId = shopId;
+    });
+    _bloc.add(
+      ProductListRequested(
+        search: _searchCtrl.text.trim(),
+        brand: brand,
+        shopId: shopId,
+      ),
+    );
   }
 
   void _onCameraTap() async {
@@ -193,7 +225,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
         imageQuality: 80,
       );
 
-      if (pickedFile == null) return;
+      if (pickedFile == null || !mounted) return;
 
       final file = File(pickedFile.path);
       
@@ -203,6 +235,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       });
 
       final keyword = await _analysisFuture;
+      if (!mounted) return;
 
       if (keyword != null && keyword.trim().isNotEmpty) {
         setState(() {
@@ -226,6 +259,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       }
     } catch (e) {
       debugPrint('Error during AI image scanning: $e');
+      if (!mounted) return;
       setState(() {
         _scannedImageFile = null;
         _analysisFuture = null;
@@ -286,14 +320,29 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     _loadProducts();
                                   },
                                   cartCount: cartCount,
-                                  onCartTap: () => context.push('/cart'),
+                                  onCartTap: () async {
+                                    await context.push('/cart');
+                                    if (mounted) {
+                                      _cartBloc.add(const CartRequested());
+                                    }
+                                  },
                                   onCameraTap: _onCameraTap,
                                 );
                               },
                             ),
-                            _TopActionMenu(),
+                            _TopActionMenu(
+                              selectedBrand: _selectedBrand,
+                              selectedShopId: _selectedShopId,
+                              onSelectBrand: _onSelectBrand,
+                            ),
                             const SizedBox(height: 16),
-                            const _CategoriesGrid(),
+                            _CategoriesGrid(
+                              onSelectTab: (index) {
+                                setState(() => _activeTabIndex = index);
+                                DefaultTabController.maybeOf(context)
+                                    ?.animateTo(index);
+                              },
+                            ),
                             const SizedBox(height: 16),
                           ],
                         ),
@@ -306,7 +355,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     const SliverToBoxAdapter(child: SizedBox(height: 8)),
                     SliverPersistentHeader(
                       pinned: true,
-                      delegate: _StickyTabBarDelegate(),
+                      delegate: _StickyTabBarDelegate(
+                        onTap: (index) {
+                          if (_activeTabIndex != index) {
+                            setState(() => _activeTabIndex = index);
+                          }
+                        },
+                      ),
                     ),
                     if (_aiSearchKeyword != null)
                       SliverToBoxAdapter(
@@ -395,6 +450,47 @@ class _ProductListScreenState extends State<ProductListScreen> {
 );
   }
 
+  List<Product> _filterProductsForActiveTab(List<Product> source) {
+    switch (_activeTabIndex) {
+      case 1: // Mall (Sản phẩm chính hãng có thương hiệu / cửa hàng)
+        final mallList = source
+            .where((p) =>
+                (p.brand != null && p.brand!.trim().isNotEmpty) ||
+                (p.shopName != null && p.shopName!.trim().isNotEmpty))
+            .toList();
+        return mallList.isNotEmpty ? mallList : source;
+      case 2: // VOUCHER EXTRA (Sản phẩm đang giảm giá / ưu đãi)
+        final discounted = source.where((p) {
+          return p.variants.any(
+            (v) =>
+                v.isActive &&
+                v.compareAtPrice != null &&
+                v.compareAtPrice! > v.price,
+          );
+        }).toList();
+        return discounted.isNotEmpty ? discounted : source;
+      case 3: // Hàng Mới Về
+        final newest = List<Product>.from(source);
+        newest.sort((a, b) {
+          final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bTime.compareTo(aTime);
+        });
+        return newest;
+      case 4: // Bán chạy
+        final bestSelling = List<Product>.from(source);
+        bestSelling.sort((a, b) {
+          final cmp = b.soldCount.compareTo(a.soldCount);
+          if (cmp != 0) return cmp;
+          return b.ratingAvg.compareTo(a.ratingAvg);
+        });
+        return bestSelling;
+      case 0:
+      default:
+        return source;
+    }
+  }
+
   Widget _buildContent(ProductListState state) {
     if (state is ProductListLoading || state is ProductListInitial) {
       return const SliverFillRemaining(
@@ -415,20 +511,30 @@ class _ProductListScreenState extends State<ProductListScreen> {
       );
     }
 
-    if (state is ProductListLoaded && state.products.isEmpty) {
+    if (state is! ProductListLoaded) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
+    final displayedProducts = _filterProductsForActiveTab(state.products);
+
+    if (displayedProducts.isEmpty) {
       return SliverFillRemaining(
         hasScrollBody: false,
         child: _StateMessage(
           icon: Icons.search_off_rounded,
-          title: 'Không tìm thấy sản phẩm nào',
-          actionLabel: 'Làm mới',
-          onAction: () => _loadProducts(),
+          title: _selectedBrand != null
+              ? 'Chưa có sản phẩm nào thuộc nhãn hàng "$_selectedBrand"'
+              : 'Không tìm thấy sản phẩm nào',
+          actionLabel: _selectedBrand != null ? 'Xem tất cả sản phẩm' : 'Làm mới',
+          onAction: () {
+            if (_selectedBrand != null || _selectedShopId != null) {
+              _onSelectBrand(null, null);
+            } else {
+              _loadProducts();
+            }
+          },
         ),
       );
-    }
-
-    if (state is! ProductListLoaded) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
     return SliverPadding(
@@ -436,13 +542,18 @@ class _ProductListScreenState extends State<ProductListScreen> {
       sliver: SliverGrid(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-            final product = state.products[index];
+            final product = displayedProducts[index];
             return ProductCard(
               product: product,
-              onTap: () => context.push('/products/${product.id}'),
+              onTap: () async {
+                await context.push('/products/${product.id}');
+                if (mounted) {
+                  _cartBloc.add(const CartRequested());
+                }
+              },
             );
           },
-          childCount: state.products.length,
+          childCount: displayedProducts.length,
         ),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
@@ -492,21 +603,24 @@ class _ShopHeader extends StatelessWidget {
                   const Icon(Icons.search, color: Colors.black54, size: 22),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
-                      controller: controller,
-                      onSubmitted: onSearch,
-                      decoration: InputDecoration(
-                        hintText: 'Nhập sản phẩm bạn muốn tìm kiếm',
-                        hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        suffixIcon: controller.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, size: 18),
-                                onPressed: onClear,
-                              )
-                            : null,
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: controller,
+                      builder: (_, value, __) => TextField(
+                        controller: controller,
+                        onSubmitted: onSearch,
+                        decoration: InputDecoration(
+                          hintText: 'Nhập sản phẩm bạn muốn tìm kiếm',
+                          hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          suffixIcon: value.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: onClear,
+                                )
+                              : null,
+                        ),
                       ),
                     ),
                   ),
@@ -569,30 +683,98 @@ class _ShopHeader extends StatelessWidget {
 }
 
 class _TopActionMenu extends StatefulWidget {
-  const _TopActionMenu();
+  final String? selectedBrand;
+  final String? selectedShopId;
+  final void Function(String? brand, String? shopId) onSelectBrand;
+
+  const _TopActionMenu({
+    required this.selectedBrand,
+    required this.selectedShopId,
+    required this.onSelectBrand,
+  });
 
   @override
   State<_TopActionMenu> createState() => _TopActionMenuState();
 }
 
 class _TopActionMenuState extends State<_TopActionMenu> {
-  String? _selectedBrand;
   late final Future<List<Map<String, dynamic>>> _shopsFuture;
 
   @override
   void initState() {
     super.initState();
-    _shopsFuture = _fetchShops();
+    _shopsFuture = _fetchShopsAndBrands();
   }
 
-  Future<List<Map<String, dynamic>>> _fetchShops() async {
+  static String _formatBrandLabel(String rawName) {
+    final cleaned = rawName
+        .replaceAll(
+          RegExp(
+            r'\b(official|flagship|store|shop|mall|cửa hàng|cua hang)\b',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return cleaned.isEmpty ? rawName.trim() : cleaned;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchShopsAndBrands() async {
     try {
       final supabase = Supabase.instance.client;
-      final data = await supabase
+      final shopsFuture = supabase
           .from('shops')
           .select('id, shop_name, logo_path')
+          .eq('status', 'active')
+          .order('created_at', ascending: true);
+      final productsFuture = supabase
+          .from('products')
+          .select('brand, shop_id')
           .eq('status', 'active');
-      return List<Map<String, dynamic>>.from(data);
+
+      final shopsData = await shopsFuture;
+      final productsData = await productsFuture;
+
+      final result = <Map<String, dynamic>>[];
+      final seenKeys = <String>{};
+
+      for (final row in (shopsData as List).whereType<Map<String, dynamic>>()) {
+        final rawName = (row['shop_name'] as String? ?? '').trim();
+        if (rawName.isEmpty) continue;
+        final label = _formatBrandLabel(rawName);
+        final key = label.toLowerCase();
+        seenKeys.add(key);
+        seenKeys.add(rawName.toLowerCase());
+        result.add({
+          'id': row['id'] as String?,
+          'shop_name': rawName,
+          'label': label,
+          'logo_path': row['logo_path'] as String?,
+        });
+      }
+
+      for (final prod
+          in (productsData as List).whereType<Map<String, dynamic>>()) {
+        final rawBrand = (prod['brand'] as String? ?? '').trim();
+        if (rawBrand.isEmpty) continue;
+        final label = _formatBrandLabel(rawBrand);
+        final key = label.toLowerCase();
+        if (seenKeys.contains(key) ||
+            seenKeys.contains(rawBrand.toLowerCase())) {
+          continue;
+        }
+        seenKeys.add(key);
+        seenKeys.add(rawBrand.toLowerCase());
+        result.add({
+          'id': prod['shop_id'] as String?,
+          'shop_name': rawBrand,
+          'label': label,
+          'logo_path': null,
+        });
+      }
+
+      return result;
     } catch (e) {
       debugPrint('Lỗi tải danh sách nhãn hàng: $e');
       return [];
@@ -648,12 +830,18 @@ class _TopActionMenuState extends State<_TopActionMenu> {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? const Color(0xFFEE4D2D) : Colors.black87,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 72),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? const Color(0xFFEE4D2D) : Colors.black87,
+                ),
               ),
             ),
           ],
@@ -684,82 +872,182 @@ class _TopActionMenuState extends State<_TopActionMenu> {
         }
 
         final shops = snapshot.data ?? [];
+        final selectedBrand = widget.selectedBrand;
+        final selectedShopId = widget.selectedShopId;
+        final isAllSelected = selectedBrand == null && selectedShopId == null;
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
-          child: Row(
-            children: [
-              // "Tất cả" (All) button
-              _buildBrandItem(
-                label: 'Tất cả',
-                image: Center(
-                  child: Icon(
-                    Icons.apps_rounded,
-                    size: 28,
-                    color: _selectedBrand == null ? const Color(0xFFEE4D2D) : Colors.black54,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm),
+              child: Row(
+                children: [
+                  _buildBrandItem(
+                    label: 'Tất cả',
+                    image: Center(
+                      child: Icon(
+                        Icons.apps_rounded,
+                        size: 28,
+                        color: isAllSelected
+                            ? const Color(0xFFEE4D2D)
+                            : Colors.black54,
+                      ),
+                    ),
+                    isSelected: isAllSelected,
+                    onTap: () => widget.onSelectBrand(null, null),
                   ),
-                ),
-                isSelected: _selectedBrand == null,
-                onTap: () {
-                  setState(() {
-                    _selectedBrand = null;
-                  });
-                  context.read<ProductListBloc>().add(
-                    const ProductListRequested(brand: null),
-                  );
-                },
-              ),
-              // Dynamic brand buttons loaded from database
-              ...shops.map((shop) {
-                final shopName = shop['shop_name'] as String? ?? 'Shop';
-                // Extract short brand name (e.g., Apple Store -> Apple) to match product brand column
-                final shortBrand = shopName.split(' ').first;
-                final isSelected = _selectedBrand == shortBrand;
-                final logoUrl = shop['logo_path'] as String?;
+                  ...shops.map((shop) {
+                    final shopId = shop['id'] as String?;
+                    final label =
+                        (shop['label'] as String? ?? 'Shop').trim();
+                    final brandInitial = label.isNotEmpty
+                        ? label.substring(0, 1).toUpperCase()
+                        : 'S';
+                    final isSelected = (selectedShopId != null &&
+                            selectedShopId == shopId &&
+                            selectedBrand == label) ||
+                        (selectedBrand != null &&
+                            selectedBrand.toLowerCase() ==
+                                label.toLowerCase());
+                    final rawLogoPath = shop['logo_path'] as String?;
+                    final logoUrl = StorageImage.publicUrl(
+                      rawLogoPath,
+                      bucket: 'avatars',
+                    );
 
-                return _buildBrandItem(
-                  label: shortBrand,
-                  image: logoUrl != null && logoUrl.isNotEmpty
-                      ? Image.network(
-                          logoUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Center(
+                    return _buildBrandItem(
+                      label: label,
+                      image: logoUrl != null && logoUrl.isNotEmpty
+                          ? Image.network(
+                              logoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
+                                  child: Text(
+                                    brandInitial,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          : Center(
                               child: Text(
-                                shortBrand.substring(0, 1).toUpperCase(),
+                                brandInitial,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18,
                                   color: Colors.black54,
                                 ),
                               ),
-                            );
-                          },
-                        )
-                      : Center(
-                          child: Text(
-                            shortBrand.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.black54,
                             ),
+                      isSelected: isSelected,
+                      onTap: () {
+                        if (isSelected) {
+                          widget.onSelectBrand(null, null);
+                        } else {
+                          widget.onSelectBrand(label, shopId);
+                        }
+                      },
+                    );
+                  }),
+                ],
+              ),
+            ),
+            if (!isAllSelected)
+              Container(
+                margin: const EdgeInsets.fromLTRB(
+                  AppSizes.md,
+                  6,
+                  AppSizes.md,
+                  0,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF5F2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFEE4D2D).withOpacity(0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.verified_rounded,
+                      color: Color(0xFFEE4D2D),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Nhãn hàng: ${selectedBrand ?? "Shop"}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    if (selectedShopId != null && selectedShopId.isNotEmpty)
+                      InkWell(
+                        onTap: () => context.push('/shop/$selectedShopId'),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEE4D2D),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.storefront_outlined,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Xem Shop',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                  isSelected: isSelected,
-                  onTap: () {
-                    setState(() {
-                      _selectedBrand = shortBrand;
-                    });
-                    context.read<ProductListBloc>().add(
-                      ProductListRequested(brand: shortBrand),
-                    );
-                  },
-                );
-              }),
-            ],
-          ),
+                      ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: () => widget.onSelectBrand(null, null),
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         );
       },
     );
@@ -767,7 +1055,9 @@ class _TopActionMenuState extends State<_TopActionMenu> {
 }
 
 class _CategoriesGrid extends StatelessWidget {
-  const _CategoriesGrid();
+  final ValueChanged<int>? onSelectTab;
+
+  const _CategoriesGrid({this.onSelectTab});
 
   @override
   Widget build(BuildContext context) {
@@ -775,8 +1065,8 @@ class _CategoriesGrid extends StatelessWidget {
       {'icon': Icons.local_offer_outlined, 'label': 'Voucher', 'color': const Color(0xFFEE4D2D)},
       {'icon': Icons.receipt_long_outlined, 'label': 'Đơn hàng', 'color': Colors.blue},
       {'icon': Icons.add_business_outlined, 'label': 'Đăng ký bán', 'color': Colors.teal},
-      {'icon': Icons.shopping_bag_outlined, 'label': 'Hàng Việt', 'color': Colors.orange},
-      {'icon': Icons.card_giftcard_outlined, 'label': 'Thưởng', 'color': Colors.pink},
+      {'icon': Icons.shopping_bag_outlined, 'label': 'Chính hãng', 'color': Colors.orange},
+      {'icon': Icons.location_on_outlined, 'label': 'Địa chỉ', 'color': Colors.pink},
     ];
 
     return Column(
@@ -795,13 +1085,10 @@ class _CategoriesGrid extends StatelessWidget {
                     context.push('/orders');
                   } else if (label == 'Đăng ký bán') {
                     context.push('/register-seller');
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Tính năng "$label" đang được phát triển!'),
-                        backgroundColor: item['color'] as Color,
-                      ),
-                    );
+                  } else if (label == 'Chính hãng') {
+                    onSelectTab?.call(1);
+                  } else if (label == 'Địa chỉ') {
+                    context.push('/addresses');
                   }
                 },
                 borderRadius: BorderRadius.circular(8),
@@ -855,18 +1142,19 @@ class _FlashSaleSection extends StatefulWidget {
 class _FlashSaleSectionState extends State<_FlashSaleSection> {
   late Future<Either<Failure, List<Product>>> _flashSaleFuture;
   Timer? _timer;
-  Duration _remainingTime = Duration.zero;
+  final ValueNotifier<Duration> _remainingTimeNotifier =
+      ValueNotifier<Duration>(Duration.zero);
   int _currentSlotStartHour = 0;
 
   @override
   void initState() {
     super.initState();
     _flashSaleFuture = sl<GetFlashSaleProductsUseCase>().call();
-    _calculateSessionTime();
+    _calculateSessionTime(notifySlotChange: false);
     _startTimer();
   }
 
-  void _calculateSessionTime() {
+  void _calculateSessionTime({bool notifySlotChange = true}) {
     final now = DateTime.now();
     final hour = now.hour;
 
@@ -894,25 +1182,26 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
       endHour = 9;
     }
 
+    final slotChanged = _currentSlotStartHour != startHour;
     _currentSlotStartHour = startHour;
 
     final targetTime = endHour == 24
         ? DateTime(now.year, now.month, now.day + 1, 0, 0, 0)
         : DateTime(now.year, now.month, now.day, endHour, 0, 0);
 
-    setState(() {
-      _remainingTime = targetTime.difference(now);
-    });
+    _remainingTimeNotifier.value = targetTime.difference(now);
+    if (notifySlotChange && slotChanged && mounted) {
+      setState(() {});
+    }
   }
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingTime.inSeconds <= 0) {
+      final current = _remainingTimeNotifier.value;
+      if (current.inSeconds <= 0) {
         _calculateSessionTime();
       } else {
-        setState(() {
-          _remainingTime = _remainingTime - const Duration(seconds: 1);
-        });
+        _remainingTimeNotifier.value = current - const Duration(seconds: 1);
       }
     });
   }
@@ -920,6 +1209,7 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
   @override
   void dispose() {
     _timer?.cancel();
+    _remainingTimeNotifier.dispose();
     super.dispose();
   }
 
@@ -929,10 +1219,6 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
 
   @override
   Widget build(BuildContext context) {
-    final hours = _formatTwoDigits(_remainingTime.inHours);
-    final minutes = _formatTwoDigits(_remainingTime.inMinutes.remainder(60));
-    final seconds = _formatTwoDigits(_remainingTime.inSeconds.remainder(60));
-
     return FutureBuilder<Either<Failure, List<Product>>>(
       future: _flashSaleFuture,
       builder: (context, snapshot) {
@@ -1001,11 +1287,42 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
                           ),
                         ),
                         const Spacer(),
-                        _buildTimerBox(hours),
-                        const Text(' : ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFEE4D2D), fontSize: 12)),
-                        _buildTimerBox(minutes),
-                        const Text(' : ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFEE4D2D), fontSize: 12)),
-                        _buildTimerBox(seconds),
+                        ValueListenableBuilder<Duration>(
+                          valueListenable: _remainingTimeNotifier,
+                          builder: (_, remaining, __) {
+                            final hours = _formatTwoDigits(remaining.inHours);
+                            final minutes = _formatTwoDigits(
+                              remaining.inMinutes.remainder(60),
+                            );
+                            final seconds = _formatTwoDigits(
+                              remaining.inSeconds.remainder(60),
+                            );
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildTimerBox(hours),
+                                const Text(
+                                  ' : ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFEE4D2D),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                _buildTimerBox(minutes),
+                                const Text(
+                                  ' : ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFEE4D2D),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                _buildTimerBox(seconds),
+                              ],
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -1039,9 +1356,14 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
                             : 0.0;
                         final displayRatio = soldRatio > 0.0 ? soldRatio : 0.25;
 
+                        final coverUrl = StorageImage.publicUrl(product.coverPath);
+
                         return GestureDetector(
-                          onTap: () {
-                            context.push('/products/${product.id}');
+                          onTap: () async {
+                            await context.push('/products/${product.id}');
+                            if (context.mounted) {
+                              context.read<CartBloc>().add(const CartRequested());
+                            }
                           },
                           child: Container(
                             width: 130,
@@ -1060,9 +1382,9 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
                                       children: [
                                         ClipRRect(
                                           borderRadius: BorderRadius.circular(12),
-                                          child: product.coverPath != null && product.coverPath!.isNotEmpty
+                                          child: coverUrl != null && coverUrl.isNotEmpty
                                               ? Image.network(
-                                                  product.coverPath!,
+                                                  coverUrl,
                                                   width: double.infinity,
                                                   height: double.infinity,
                                                   fit: BoxFit.cover,
@@ -1187,6 +1509,10 @@ class _FlashSaleSectionState extends State<_FlashSaleSection> {
 }
 
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final ValueChanged<int>? onTap;
+
+  _StickyTabBarDelegate({this.onTap});
+
   @override
   double get minExtent => 48.0;
   @override
@@ -1196,28 +1522,30 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Container(
       color: Colors.white,
-      child: const TabBar(
+      child: TabBar(
         isScrollable: true,
         tabAlignment: TabAlignment.start,
         indicatorColor: Colors.black87,
         indicatorWeight: 3,
         labelColor: Colors.black87,
         unselectedLabelColor: Colors.black54,
-        labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
-        tabs: [
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
+        onTap: onTap,
+        tabs: const [
           Tab(text: 'Tất cả'),
           Tab(text: 'Mall'),
           Tab(text: 'VOUCHER EXTRA'),
           Tab(text: 'Hàng Mới Về'),
-          Tab(text: 'Quần áo nữ'),
+          Tab(text: 'Bán Chạy'),
         ],
       ),
     );
   }
 
   @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) => false;
+  bool shouldRebuild(covariant _StickyTabBarDelegate oldDelegate) =>
+      oldDelegate.onTap != onTap;
 }
 
 class _StateMessage extends StatelessWidget {

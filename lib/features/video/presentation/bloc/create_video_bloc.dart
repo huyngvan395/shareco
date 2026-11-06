@@ -10,25 +10,14 @@ class CreateVideoBloc extends Bloc<CreateVideoEvent, CreateVideoState> {
 
   CreateVideoBloc({required this.createVideo})
       : super(const CreateVideoInitial()) {
-    on<CreateVideoPickRequested>(_onPick);
     on<CreateVideoPickedFromPath>(_onPickedFromPath);
-    on<CreateVideoRecordRequested>(_onRecord);
-    on<CreateVideoResetRequested>(_onReset);
     on<CreateVideoVisibilityChanged>(_onVisibilityChanged);
     on<CreateVideoSettingChanged>(_onSettingChanged);
     on<CreateVideoThumbnailChanged>(_onThumbnailChanged);
+    on<CreateVideoProductTagToggled>(_onProductTagToggled);
+    on<CreateVideoProductsUpdated>(_onProductsUpdated);
     on<CreateVideoPostRequested>(_onPost);
     on<CreateVideoUploadProgressChanged>(_onUploadProgressChanged);
-  }
-
-  Future<void> _onPick(
-      CreateVideoPickRequested _, Emitter<CreateVideoState> emit) async {
-    emit(const CreateVideoLoading());
-    await Future.delayed(const Duration(milliseconds: 200));
-    emit(const CreateVideoPickedFile(
-      localPath: '/local/video.mp4',
-      thumbnailPath: '/local/thumb.jpg',
-    ));
   }
 
   Future<void> _onPickedFromPath(
@@ -52,20 +41,6 @@ class CreateVideoBloc extends Bloc<CreateVideoEvent, CreateVideoState> {
       localPath: event.localPath,
       thumbnailPath: thumbnail,
     ));
-  }
-
-  Future<void> _onRecord(
-      CreateVideoRecordRequested _, Emitter<CreateVideoState> emit) async {
-    emit(const CreateVideoLoading());
-    await Future.delayed(const Duration(milliseconds: 200));
-    emit(const CreateVideoPickedFile(
-      localPath: '/local/recorded.mp4',
-      thumbnailPath: '/local/recorded_thumb.jpg',
-    ));
-  }
-
-  void _onReset(CreateVideoResetRequested _, Emitter<CreateVideoState> emit) {
-    emit(const CreateVideoInitial());
   }
 
   void _onVisibilityChanged(
@@ -98,6 +73,7 @@ class CreateVideoBloc extends Bloc<CreateVideoEvent, CreateVideoState> {
       thumbnailPath: current.thumbnailPath,
       caption: event.caption.isEmpty ? null : event.caption,
       visibility: current.visibility,
+      taggedProductIds: current.taggedProducts.map((p) => p.id).toList(),
       onProgress: (p) {
         add(CreateVideoUploadProgressChanged(p));
       },
@@ -107,6 +83,31 @@ class CreateVideoBloc extends Bloc<CreateVideoEvent, CreateVideoState> {
           (f) => emit(CreateVideoError(f.message)),
           (_) => emit(const CreateVideoSuccess()),
     );
+  }
+
+  void _onProductTagToggled(
+      CreateVideoProductTagToggled event,
+      Emitter<CreateVideoState> emit,
+      ) {
+    final current = state;
+    if (current is! CreateVideoPickedFile) return;
+    final list = List.of(current.taggedProducts);
+    final idx = list.indexWhere((p) => p.id == event.product.id);
+    if (idx >= 0) {
+      list.removeAt(idx);
+    } else {
+      list.add(event.product);
+    }
+    emit(current.copyWith(taggedProducts: list));
+  }
+
+  void _onProductsUpdated(
+      CreateVideoProductsUpdated event,
+      Emitter<CreateVideoState> emit,
+      ) {
+    final current = state;
+    if (current is! CreateVideoPickedFile) return;
+    emit(current.copyWith(taggedProducts: List.of(event.products)));
   }
 
   void _onThumbnailChanged(

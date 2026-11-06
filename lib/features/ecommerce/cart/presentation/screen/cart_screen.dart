@@ -56,7 +56,12 @@ class _CartScreenState extends State<CartScreen> {
                 ? null
                 : CartSummaryBar(
                     cart: cart,
-                    onCheckout: () => context.push('/checkout'),
+                    onCheckout: () async {
+                      await context.push('/checkout');
+                      if (mounted) {
+                        _bloc.add(const CartRequested());
+                      }
+                    },
                   ),
           );
         },

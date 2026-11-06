@@ -26,6 +26,7 @@ abstract class VideoRemoteDataSource {
     required String localThumbnailPath,
     required String caption,
     required String visibility,
+    List<String> taggedProductIds = const [],
     void Function(double progress)? onProgress,
   });
   Future<VideoModel> updateVideo(
@@ -37,12 +38,24 @@ abstract class VideoRemoteDataSource {
 class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
   static const _table = 'videos';
   static const _likesTable = 'video_likes';
-  // Join author profile
+  static const _productTagsTable = 'video_product_tags';
+  // Join author profile & tagged products
   static const _select = '''
     *,
     profiles:author_id (
       id, username, display_name, avatar_url, is_verified,
       follower_count, following_count, like_received_count
+    ),
+    video_product_tags (
+      sort_order,
+      products (
+        id, shop_id, category_id, title, description, brand, status,
+        price_min, price_max, currency, stock_total, sold_count,
+        rating_avg, rating_count, cover_path, created_at, updated_at,
+        shops(shop_name),
+        product_media(id, product_id, media_type, storage_path, sort_order, created_at),
+        product_variants(id, product_id, sku, variant_name, price, compare_at_price, stock_qty, weight_grams, status, created_at)
+      )
     )
   ''';
   static const _limit = Env.videoPageSize;
@@ -123,16 +136,22 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
             items: [], page: page, limit: _limit, hasMore: false);
       }
 
-      // Re-fetch với join để có profiles
-      final full = await SupabaseService.from(_table)
+      // Re-fetch với join để có profiles & liked status song song
+      final fullFuture = SupabaseService.from(_table)
           .select(_select)
-          .inFilter('id', ids) as List;
+          .inFilter('id', ids);
+      final likedFuture = _getLikedIds(ids);
+      final full = await fullFuture as List;
+      final liked = await likedFuture;
 
-      final liked = await _getLikedIds(ids);
-      final models = [
+      final byId = {
         for (final r in full)
-          VideoModel.fromJson(r as Map<String, dynamic>,
-              isLiked: liked.contains(r['id']))
+          (r as Map<String, dynamic>)['id'] as String: r,
+      };
+      final models = [
+        for (final id in ids)
+          if (byId.containsKey(id))
+            VideoModel.fromJson(byId[id]!, isLiked: liked.contains(id))
       ];
 
       return PaginatedResult(
@@ -150,12 +169,16 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
   Future<PaginatedResult<VideoModel>> getUserVideos(
       {required String userId, int page = 0}) async {
     try {
-      final query = SupabaseService.from(_table)
+      final isOwnProfile = SupabaseService.currentUserId == userId;
+      var query = SupabaseService.from(_table)
           .select(_select)
-          .eq('author_id', userId)
-          .eq('status', 'published')
-          .order('published_at', ascending: false);
-      return _paginate(query, page);
+          .eq('author_id', userId);
+      if (isOwnProfile) {
+        query = query.inFilter('status', ['draft', 'published']);
+      } else {
+        query = query.eq('status', 'published');
+      }
+      return _paginate(query.order('created_at', ascending: false), page);
     } catch (e) {
       throw ServerException(e.toString());
     }
@@ -209,38 +232,60 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
     required String localThumbnailPath,
     required String caption,
     required String visibility,
+    List<String> taggedProductIds = const [],
     void Function(double progress)? onProgress,
   }) async {
     try {
       final uid = SupabaseService.currentUserId;
       if (uid == null) throw ServerException('User not authenticated');
 
-      // ── Step 1: Upload video (chiếm 85% progress) ──────────────────────
+      // ── Step 1 & 2: Upload video & thumbnail song song ─────────────────
+      final thumbFuture = localThumbnailPath.isNotEmpty
+          ? _cloudinary.uploadThumbnail(localThumbnailPath)
+          : Future<String?>.value(null);
+
       final videoUrl = await _cloudinary.uploadVideo(
         localVideoPath,
         onProgress: (p) => onProgress?.call(p * 0.85),
       );
-
-      // ── Step 2: Upload thumbnail (chiếm 10% progress) ──────────────────
-      String? thumbnailUrl;
-      if (localThumbnailPath.isNotEmpty) {
-        thumbnailUrl = await _cloudinary.uploadThumbnail(localThumbnailPath);
-        onProgress?.call(0.95);
-      }
+      final thumbnailUrl = await thumbFuture;
+      onProgress?.call(0.95);
 
       // ── Step 3: Insert metadata vào Supabase (chiếm 5% cuối) ───────────
-      final row = await SupabaseService.from(_table)
+      // Mặc định status = 'draft' (Chờ Super Admin kiểm duyệt trước khi lên Xu hướng)
+      var row = await SupabaseService.from(_table)
           .insert({
         'author_id':     uid,
         'video_path':     videoUrl,
         'thumbnail_path': thumbnailUrl,
         'caption':       caption.isEmpty ? null : caption,
         'visibility':    visibility,
-        'status':        'published',
+        'status':        'draft',
         'published_at':  DateTime.now().toIso8601String(),
       })
           .select(_select)
           .single();
+
+      // ── Step 4: Gắn sản phẩm vào bảng video_product_tags (nếu có) ──────
+      if (taggedProductIds.isNotEmpty) {
+        final videoId = row['id'] as String;
+        final uniqueIds = taggedProductIds.toSet().toList();
+        final tagRows = [
+          for (var i = 0; i < uniqueIds.length; i++)
+            {
+              'video_id': videoId,
+              'product_id': uniqueIds[i],
+              'sort_order': i,
+            }
+        ];
+        await SupabaseService.from(_productTagsTable).insert(tagRows);
+
+        // Fetch lại video đã bao gồm danh sách sản phẩm vừa gắn
+        row = await SupabaseService.from(_table)
+            .select(_select)
+            .eq('id', videoId)
+            .single();
+      }
 
       onProgress?.call(1.0);
       return VideoModel.fromJson(row);
@@ -289,15 +334,23 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
 
     if (rows.isEmpty) return [];
 
-    final ids = rows.map((e) => e['id']).toList();
+    final ids = [for (final e in rows) e['id'] as String];
 
-    final full = await SupabaseService
-        .from('videos')
+    final fullFuture = SupabaseService.from('videos')
         .select(_select)
         .inFilter('id', ids);
+    final likedFuture = _getLikedIds(ids);
+    final full = await fullFuture as List;
+    final liked = await likedFuture;
 
-    return (full as List)
-        .map((e) => VideoModel.fromJson(e))
-        .toList();
+    final byId = {
+      for (final r in full)
+        (r as Map<String, dynamic>)['id'] as String: r,
+    };
+    return [
+      for (final id in ids)
+        if (byId.containsKey(id))
+          VideoModel.fromJson(byId[id]!, isLiked: liked.contains(id)),
+    ];
   }
 }

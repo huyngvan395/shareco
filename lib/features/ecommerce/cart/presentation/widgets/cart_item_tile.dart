@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../core/constants/app_colors.dart';
@@ -37,9 +38,12 @@ class CartItemTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppSizes.radiusMd),
-            child: _CartImage(path: item.imagePath),
+          GestureDetector(
+            onTap: () => context.push('/products/${item.productId}'),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+              child: _CartImage(path: item.imagePath),
+            ),
           ),
           const SizedBox(width: AppSizes.md),
           Expanded(
@@ -50,15 +54,18 @@ class CartItemTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.black87,
-                          fontSize: AppSizes.fontMd,
-                          fontWeight: FontWeight.w800,
-                          height: 1.25,
+                      child: GestureDetector(
+                        onTap: () => context.push('/products/${item.productId}'),
+                        child: Text(
+                          item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: AppSizes.fontMd,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
+                          ),
                         ),
                       ),
                     ),
@@ -85,13 +92,38 @@ class CartItemTile extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(height: AppSizes.xs),
-                Text(
-                  item.shopName ?? 'Shop',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.black45,
-                    fontSize: AppSizes.fontSm,
+                GestureDetector(
+                  onTap: item.shopId != null && item.shopId!.isNotEmpty
+                      ? () => context.push('/shop/${item.shopId}')
+                      : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.storefront_outlined,
+                        size: 14,
+                        color: Colors.black54,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          item.shopName ?? 'Shop',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: AppSizes.fontSm,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (item.shopId != null && item.shopId!.isNotEmpty)
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 14,
+                          color: Colors.black38,
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: AppSizes.sm),

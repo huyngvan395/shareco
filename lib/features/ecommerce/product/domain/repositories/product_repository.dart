@@ -9,6 +9,7 @@ abstract class ProductRepository {
     String? search,
     String? categoryId,
     String? brand,
+    String? shopId,
   });
 
   Future<Either<Failure, Product>> getProductDetail(String productId);

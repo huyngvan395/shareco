@@ -2,14 +2,16 @@
 
 import 'dart:async';
 
-import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shareco/features/feed/presentation/bloc/search_event.dart';
 import 'package:shareco/features/feed/presentation/bloc/search_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../features/video/domain/entities/video_entity.dart';
 import '../../../../../features/video/domain/repositories/video_repository.dart';
+
+class _SearchHistoryLoaded extends SearchEvent {
+  const _SearchHistoryLoaded();
+}
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final VideoRepository _videoRepository;
@@ -23,18 +25,20 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   SearchBloc({required VideoRepository videoRepository})
       : _videoRepository = videoRepository,
         super(const SearchState()) {
+    on<_SearchHistoryLoaded>(_onHistoryLoaded);
     on<SearchQueryChanged>(_onQueryChanged);
     on<SearchSubmitted>(_onSubmitted);
     on<SearchHistoryRemoved>(_onHistoryRemoved);
     on<SearchHistoryCleared>(_onHistoryCleared);
     on<SearchReset>(_onReset);
 
-    _loadHistory();
+    add(const _SearchHistoryLoaded());
   }
 
   // ─── Lịch sử ────────────────────────────────────────────────────────────────
 
-  Future<void> _loadHistory() async {
+  Future<void> _onHistoryLoaded(
+      _SearchHistoryLoaded event, Emitter<SearchState> emit) async {
     final prefs = await SharedPreferences.getInstance();
     final history = prefs.getStringList(_historyKey) ?? [];
     emit(state.copyWith(history: history));

@@ -43,6 +43,20 @@ class ShopRemoteDataSourceImpl implements ShopRemoteDataSource {
     }
   }
 
+  static String _extractBrandKeyword(String rawName) {
+    final cleaned = rawName
+        .replaceAll(
+          RegExp(
+            r'\b(official|flagship|store|shop|mall|vn|vietnam|cửa hàng|cua hang)\b',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return cleaned.isEmpty ? rawName.trim() : cleaned;
+  }
+
   @override
   Future<List<ProductModel>> getShopProducts({
     required String shopId,
@@ -50,10 +64,34 @@ class ShopRemoteDataSourceImpl implements ShopRemoteDataSource {
     String? search,
   }) async {
     try {
+      String? shopName;
+      try {
+        final shopRow = await SupabaseService.from('shops')
+            .select('shop_name')
+            .eq('id', shopId)
+            .maybeSingle();
+        shopName = (shopRow?['shop_name'] as String?)?.trim();
+      } catch (_) {}
+
       dynamic query = SupabaseService.from('products')
           .select(_productSelect)
-          .eq('status', 'active')
-          .eq('shop_id', shopId);
+          .eq('status', 'active');
+
+      if (shopName != null && shopName.isNotEmpty) {
+        final brandKeyword = _extractBrandKeyword(shopName);
+        if (brandKeyword.toLowerCase() != shopName.toLowerCase() &&
+            brandKeyword.isNotEmpty) {
+          query = query.or(
+            'shop_id.eq.$shopId,brand.ilike.%$shopName%,brand.ilike.%$brandKeyword%',
+          );
+        } else {
+          query = query.or(
+            'shop_id.eq.$shopId,brand.ilike.%$shopName%',
+          );
+        }
+      } else {
+        query = query.eq('shop_id', shopId);
+      }
 
       final keyword = search?.trim();
       if (keyword != null && keyword.isNotEmpty) {

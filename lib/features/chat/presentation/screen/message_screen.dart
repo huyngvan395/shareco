@@ -12,9 +12,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:shareco/core/services/media/audio_recorder_service.dart';
 import 'package:shareco/core/services/media/image_picker_service.dart';
 import 'package:shareco/features/chat/presentation/bloc/message_event.dart';
-import 'package:shareco/features/chat/presentation/widgets/recording_wave.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/services/supabase/index.dart';
 import '../../../../di/injector.dart';
 import '../../../../shared/domain/entities/base_entity.dart';
@@ -91,7 +89,9 @@ class _MessageViewState extends State<_MessageView> {
     _scrollCtrl.dispose();
     _inputFocus.dispose();
     _recordTimer?.cancel();
-    _audioRecorder.dispose();
+    if (_isRecording) {
+      _audioRecorder.cancelRecording();
+    }
     super.dispose();
   }
 
@@ -142,7 +142,7 @@ class _MessageViewState extends State<_MessageView> {
     final file = source == ImageSource.gallery
         ? await _imagePicker.pickFromGallery()
         : await _imagePicker.pickFromCamera();
-    if (file == null) return;
+    if (file == null || !mounted) return;
     context.read<MessageBloc>().add(
       MessageSendImageRequested(file: file, localPath: file.path),
     );
@@ -218,7 +218,7 @@ class _MessageViewState extends State<_MessageView> {
         setState(() => _recordDuration += const Duration(seconds: 1));
       });
     } catch (e) {
-      print('❌ Start recording error: $e');
+      debugPrint('❌ Start recording error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -343,7 +343,7 @@ class _MessageViewState extends State<_MessageView> {
 
   PreferredSizeWidget _buildAppBar() {
     final other = _other;
-    String _timeAgo(DateTime dt) {
+    String timeAgo(DateTime dt) {
       final diff = DateTime.now().difference(dt);
       if (diff.inMinutes < 1) return 'Vừa hoạt động';
       if (diff.inMinutes < 60) return 'Hoạt động ${diff.inMinutes} phút trước';
@@ -368,7 +368,10 @@ class _MessageViewState extends State<_MessageView> {
                   : null,
               child: other?.avatarUrl == null
                   ? Text(
-                      (other?.username ?? '?')[0].toUpperCase(),
+                      (other?.username.isNotEmpty == true
+                              ? other!.username[0]
+                              : '?')
+                          .toUpperCase(),
                       style: const TextStyle(
                         color: Colors.black87,
                         fontWeight: FontWeight.w700,
@@ -428,7 +431,7 @@ class _MessageViewState extends State<_MessageView> {
                               isOnline
                                   ? 'Đang hoạt động'
                                   : lastSeen != null
-                                  ? _timeAgo(lastSeen)
+                                  ? timeAgo(lastSeen)
                                   : '',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -470,7 +473,10 @@ class _MessageViewState extends State<_MessageView> {
                   : null,
               child: _other?.avatarUrl == null
                   ? Text(
-                      (_other?.username ?? '?')[0].toUpperCase(),
+                      (_other?.username.isNotEmpty == true
+                              ? _other!.username[0]
+                              : '?')
+                          .toUpperCase(),
                       style: const TextStyle(
                         color: Colors.black87,
                         fontSize: 24,
@@ -529,17 +535,6 @@ class _MessageViewState extends State<_MessageView> {
 
         final idx = state.isLoadingMore ? i - 1 : i;
         final msg = state.messages[idx];
-        print('''
-   Message ${idx + 1}/${state.messages.length}
-   ID       : ${msg.id}
-   Type     : ${msg.type}
-   Content  : ${msg.content}
-   MediaURL : ${msg.mediaUrl}
-   IsMine   : ${msg.isMine}
-   IsPending: ${msg.isPending}
-   CreatedAt: ${msg.createdAt}
-  ────────────────────────────────
-  ''');
         final prevMsg = idx > 0 ? state.messages[idx - 1] : null;
         final nextMsg = idx < state.messages.length - 1
             ? state.messages[idx + 1]
@@ -610,7 +605,6 @@ class _MessageViewState extends State<_MessageView> {
                     maxLines: 5,
                     minLines: 1,
                     style: const TextStyle(color: Colors.black87, fontSize: 15),
-                    onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: 'Nhập tin nhắn...',
                       hintStyle: const TextStyle(color: Colors.black45),
@@ -647,41 +641,44 @@ class _MessageViewState extends State<_MessageView> {
 
                 const SizedBox(width: 8),
 
-                // Send hoặc Mic
-                _textCtrl.text.trim().isNotEmpty
-                    ? GestureDetector(
-                        onTap: _sendText,
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
+                // Send hoặc Mic (chỉ rebuild nút này khi gõ phím)
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _textCtrl,
+                  builder: (_, value, __) => value.text.trim().isNotEmpty
+                      ? GestureDetector(
+                          onTap: _sendText,
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
+                        )
+                      : GestureDetector(
+                          onLongPressStart: (_) => _startRecording(),
+                          onLongPressEnd: (_) => _stopAndSendRecording(),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.mic_outlined,
+                              color: Colors.black54,
+                              size: 22,
+                            ),
                           ),
                         ),
-                      )
-                    : GestureDetector(
-                        onLongPressStart: (_) => _startRecording(),
-                        onLongPressEnd: (_) => _stopAndSendRecording(),
-                        child: Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.mic_outlined,
-                            color: Colors.black54,
-                            size: 22,
-                          ),
-                        ),
-                      ),
+                ),
               ],
             ),
     );
@@ -1273,6 +1270,16 @@ class _AudioBubbleState extends State<_AudioBubble> {
     _init();
   }
 
+  @override
+  void didUpdateWidget(covariant _AudioBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.audioUrl != widget.audioUrl && widget.audioUrl.isNotEmpty) {
+      _playerSub?.cancel();
+      _positionSub?.cancel();
+      _init();
+    }
+  }
+
   Future<void> _init() async {
     if (widget.audioUrl.isEmpty) return;
 
@@ -1283,21 +1290,24 @@ class _AudioBubbleState extends State<_AudioBubble> {
         await _player.setUrl(widget.audioUrl);
       }
       final dur = await _player.load();
+      if (!mounted) return;
       if (dur != null) setState(() => _duration = dur);
     } catch (e) {
-      print('Audio init error: $e');
+      debugPrint('Audio init error: $e');
     }
 
+    if (!mounted) return;
     _playerSub = _player.playerStateStream.listen((s) {
+      if (!mounted) return;
       setState(() => _isPlaying = s.playing);
       if (s.processingState == ProcessingState.completed) {
         _player.pause();
         _player.seek(Duration.zero);
-        setState(() => _isPlaying = false);
+        if (mounted) setState(() => _isPlaying = false);
       }
     });
     _positionSub = _player.positionStream.listen((p) {
-      setState(() => _position = p);
+      if (mounted) setState(() => _position = p);
     });
   }
 

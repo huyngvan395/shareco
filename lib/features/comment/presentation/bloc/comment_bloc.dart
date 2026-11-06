@@ -53,11 +53,23 @@ class CommentBloc extends Bloc<CommentEvent, CommentState> {
       parentId: event.parentId,
     );
     r.fold(
-          (f) => emit(current.copyWith(isPosting: false)),
-          (c) => emit(current.copyWith(
-        comments: [c, ...current.comments],
-        isPosting: false,
-      )),
+      (f) => emit(current.copyWith(isPosting: false)),
+      (c) {
+        if (event.parentId != null) {
+          final updated = current.comments.map((parent) {
+            if (parent.id == event.parentId) {
+              return parent.copyWith(replies: [...parent.replies, c]);
+            }
+            return parent;
+          }).toList();
+          emit(current.copyWith(comments: updated, isPosting: false));
+        } else {
+          emit(current.copyWith(
+            comments: [c, ...current.comments],
+            isPosting: false,
+          ));
+        }
+      },
     );
   }
 

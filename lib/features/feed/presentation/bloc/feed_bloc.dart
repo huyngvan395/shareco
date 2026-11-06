@@ -1,6 +1,5 @@
 // features/feed/presentation/bloc/feed_bloc.dart
 
-import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_event.dart';
 import 'package:shareco/features/feed/presentation/bloc/feed_state.dart';

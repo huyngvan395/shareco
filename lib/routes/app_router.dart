@@ -131,11 +131,6 @@ class AppRouter {
           ); // Using dynamic to avoid importing OrderItem here, or I can import it.
         },
       ),
-
-      GoRoute(
-        path: Routes.create,
-        builder: (_, _) => const CreateVideoScreen(),
-      ),
       GoRoute(
         path: Routes.profileDetail,
         builder: (_, state) {

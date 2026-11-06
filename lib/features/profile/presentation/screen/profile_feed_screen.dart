@@ -6,56 +6,9 @@ import 'package:shareco/features/profile/presentation/bloc/profile_bloc.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_event.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_state.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/storage_image.dart';
+import '../../../../core/utils/video_controller_cache.dart';
 import '../../../feed/presentation/widgets/video_item.dart';
 import '../../../video/domain/entities/video_entity.dart';
-import 'package:video_player/video_player.dart';
-
-class _VideoCache {
-  final Map<String, VideoPlayerController> _cache = {};
-  final Map<String, Future<VideoPlayerController>> _pending = {};
-  static const _max = 5;
-
-  Future<VideoPlayerController> getOrCreate(String path) async {
-    final url = StorageImage.videoUrl(path);
-    if (_cache.containsKey(url)) return _cache[url]!;
-    if (_pending.containsKey(url)) return _pending[url]!;
-    final future = _create(url);
-    _pending[url] = future;
-    return future;
-  }
-
-  Future<VideoPlayerController> _create(String url) async {
-    if (_cache.length >= _max) {
-      final old = _cache.keys.first;
-      await _cache[old]?.dispose();
-      _cache.remove(old);
-    }
-    final ctrl = VideoPlayerController.networkUrl(
-      Uri.parse(url),
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-    );
-    await ctrl.initialize();
-    ctrl.setLooping(true);
-    _cache[url] = ctrl;
-    _pending.remove(url);
-    return ctrl;
-  }
-
-  void pauseAll() {
-    for (final c in _cache.values) {
-      c.pause();
-    }
-  }
-
-  Future<void> disposeAll() async {
-    for (final c in _cache.values) {
-      await c.dispose();
-    }
-    _cache.clear();
-    _pending.clear();
-  }
-}
 
 class ProfileFeedScreen extends StatefulWidget {
   /// Index của video được tap trong grid
@@ -68,7 +21,7 @@ class ProfileFeedScreen extends StatefulWidget {
 }
 
 class _ProfileFeedScreenState extends State<ProfileFeedScreen> {
-  final _cache = _VideoCache();
+  final _cache = VideoControllerCache();
   late final PageController _pageCtrl;
   int _activePage = 0;
 

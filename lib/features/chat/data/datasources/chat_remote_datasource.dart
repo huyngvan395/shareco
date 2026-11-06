@@ -106,7 +106,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           .single();
 
       return ConversationModel.fromJson(
-          row as Map<String, dynamic>, currentUserId: _uid);
+          row, currentUserId: _uid);
     } catch (e) {
       debugPrint('ERROR: $e');
       throw ServerException(e.toString());
@@ -159,7 +159,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           .single();
 
       return MessageModel.fromJson(
-          row as Map<String, dynamic>, isMine: true);
+          row, isMine: true);
     } catch (e) {
       debugPrint('ERROR: $e');
       throw ServerException(e.toString());
@@ -222,7 +222,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
               .eq('id', id)
               .single();
           yield MessageModel.fromJson(
-            full as Map<String, dynamic>,
+            full,
             isMine: (full['sender_id'] as String) == _uid,
           );
         } catch (_) {
@@ -249,7 +249,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           .eq('id', conversationId)
           .single();
       return ConversationModel.fromJson(
-          full as Map<String, dynamic>, currentUserId: _uid);
+          full, currentUserId: _uid);
     });
   }
 

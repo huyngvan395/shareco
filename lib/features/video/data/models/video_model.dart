@@ -1,6 +1,8 @@
 // features/video/data/models/video_model.dart
 
 import '../../../../shared/data/models/profile_stub_model.dart';
+import '../../../ecommerce/product/data/models/product_model.dart';
+import '../../../ecommerce/product/domain/entities/product.dart';
 import '../../domain/entities/video_entity.dart';
 
 class VideoModel extends VideoEntity {
@@ -26,6 +28,7 @@ class VideoModel extends VideoEntity {
     super.commentCount,
     super.shareCount,
     super.productTagCount,
+    super.taggedProducts,
     super.publishedAt,
     super.isLiked,
     super.isFollowingAuthor,
@@ -35,6 +38,26 @@ class VideoModel extends VideoEntity {
       {bool isLiked = false, bool isFollowingAuthor = false}) {
     // Supabase join: profiles nested hoặc flat
     final authorJson = json['profiles'] as Map<String, dynamic>? ?? {};
+
+    // Parse video_product_tags -> List<Product>
+    final rawTags = json['video_product_tags'];
+    final parsedProducts = <Product>[];
+    if (rawTags is List) {
+      final sortedTags = rawTags.whereType<Map<String, dynamic>>().toList()
+        ..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
+            .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
+      for (final tag in sortedTags) {
+        final prodJson = tag['products'];
+        if (prodJson is Map<String, dynamic>) {
+          try {
+            parsedProducts.add(ProductModel.fromJson(prodJson).toEntity());
+          } catch (_) {}
+        }
+      }
+    }
+
+    final rawTagCount = (json['product_tag_count'] as num?)?.toInt() ?? 0;
+
     return VideoModel(
       id: json['id'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -59,7 +82,8 @@ class VideoModel extends VideoEntity {
       likeCount: (json['like_count'] as num?)?.toInt() ?? 0,
       commentCount: (json['comment_count'] as num?)?.toInt() ?? 0,
       shareCount: (json['share_count'] as num?)?.toInt() ?? 0,
-      productTagCount: (json['product_tag_count'] as num?)?.toInt() ?? 0,
+      productTagCount: parsedProducts.isNotEmpty ? parsedProducts.length : rawTagCount,
+      taggedProducts: parsedProducts,
       publishedAt: json['published_at'] != null
           ? DateTime.parse(json['published_at'] as String)
           : null,

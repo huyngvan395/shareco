@@ -235,16 +235,33 @@ class _OrderCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.storefront_outlined, size: 18),
-                  const SizedBox(width: AppSizes.xs),
                   Expanded(
-                    child: Text(
-                      order.shopName ?? 'Shop',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w900,
+                    child: GestureDetector(
+                      onTap: order.shopId.isNotEmpty
+                          ? () => context.push('/shop/${order.shopId}')
+                          : null,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.storefront_outlined, size: 18),
+                          const SizedBox(width: AppSizes.xs),
+                          Flexible(
+                            child: Text(
+                              order.shopName ?? 'Shop',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          if (order.shopId.isNotEmpty)
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: Colors.black45,
+                            ),
+                        ],
                       ),
                     ),
                   ),

@@ -20,14 +20,18 @@ class ProductListLoading extends ProductListState {
 class ProductListLoaded extends ProductListState {
   final List<Product> products;
   final String? search;
+  final String? selectedBrand;
+  final String? selectedShopId;
 
   const ProductListLoaded({
     required this.products,
     this.search,
+    this.selectedBrand,
+    this.selectedShopId,
   });
 
   @override
-  List<Object?> get props => [products, search];
+  List<Object?> get props => [products, search, selectedBrand, selectedShopId];
 }
 
 class ProductListFailure extends ProductListState {

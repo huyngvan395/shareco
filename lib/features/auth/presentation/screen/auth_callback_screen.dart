@@ -4,8 +4,6 @@ import 'package:shareco/core/notifier/auth_notifier.dart';
 import 'package:shareco/di/injector.dart';
 import 'package:shareco/features/auth/domain/usecases/exchange_code_usecase.dart';
 
-import '../../../../core/services/supabase/index.dart';
-
 class AuthCallbackScreen extends StatefulWidget {
   final Uri uri;
 
