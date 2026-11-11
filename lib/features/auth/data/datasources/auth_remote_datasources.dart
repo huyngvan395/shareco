@@ -3,7 +3,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthException;
 import '../../../../core/errors/exception.dart';
+import '../../../../core/notifier/auth_notifier.dart';
 import '../../../../core/services/supabase/index.dart';
+import '../../../../di/injector.dart';
 import '../models/auth_session_model.dart';
 
 abstract class AuthRemoteDataSource {
@@ -37,7 +39,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         password: password,
       );
       if (response.session == null) {
-        throw const AuthException('Login failed: no session returned');
+        throw const AuthException('Đăng nhập thất bại: không nhận được phiên đăng nhập.');
+      }
+      if (sl.isRegistered<AuthNotifier>()) {
+        sl<AuthNotifier>().syncSession(response.session);
       }
       return AuthSessionModel.fromSupabase(response.session!);
     } on AuthException {
@@ -64,9 +69,19 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         data: {'username': username},
       );
       if (response.user == null) {
-        throw const AuthException('Registration failed');
+        throw const AuthException('Đăng ký tài khoản thất bại.');
+      }
+      if (response.session == null) {
+        throw const AuthException(
+          'Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.',
+        );
+      }
+      if (sl.isRegistered<AuthNotifier>()) {
+        sl<AuthNotifier>().syncSession(response.session);
       }
       return AuthSessionModel.fromSupabase(response.session!);
+    } on AuthException {
+      rethrow;
     } on AuthApiException catch (e) {
       throw AuthException(e.message);
     } catch (e) {
@@ -77,7 +92,11 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> logout() async {
     try {
-      await SupabaseService.auth.signOut();
+      if (sl.isRegistered<AuthNotifier>()) {
+        await sl<AuthNotifier>().signOut();
+      } else {
+        await SupabaseService.auth.signOut();
+      }
     } catch (e) {
       throw ServerException(e.toString());
     }
@@ -93,7 +112,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> exchangeCode(String code) async {
     try {
-      await SupabaseService.auth.exchangeCodeForSession(code);
+      final response = await SupabaseService.auth.exchangeCodeForSession(code);
+      if (sl.isRegistered<AuthNotifier>()) {
+        sl<AuthNotifier>().syncSession(response.session);
+      }
     } on AuthApiException catch (e) {
       throw AuthException(e.message);
     } catch (e) {

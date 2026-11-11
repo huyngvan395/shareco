@@ -14,11 +14,17 @@ class PlaceOrderUseCase {
     required CheckoutAddress address,
     String? note,
     double discountAmount = 0.0,
+    double shippingAmount = 0.0,
+    String shippingService = 'fast',
+    String? shippingCarrier,
   }) {
     return repository.placeOrder(
       address: address,
       note: note,
       discountAmount: discountAmount,
+      shippingAmount: shippingAmount,
+      shippingService: shippingService,
+      shippingCarrier: shippingCarrier,
     );
   }
 }

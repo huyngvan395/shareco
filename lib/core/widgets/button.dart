@@ -887,32 +887,61 @@ class AppButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = backgroundColor ?? AppColors.primary;
     final fg = textColor ?? Colors.white;
+    final useBrandGradient = backgroundColor == null && !isOutlined;
+
+    if (isOutlined) {
+      return SizedBox(
+        width: width ?? double.infinity,
+        height: 52,
+        child: OutlinedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: OutlinedButton.styleFrom(
+            backgroundColor: AppColors.surfaceCard.withValues(alpha: 0.6),
+            side: BorderSide(
+              color: backgroundColor ?? AppColors.borderHighlight,
+              width: 1.4,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: _child(textColor ?? Colors.white),
+        ),
+      );
+    }
 
     return SizedBox(
       width: width ?? double.infinity,
       height: 52,
-      child: isOutlined
-          ? OutlinedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: bg, width: 1.5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
-          ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: useBrandGradient ? AppColors.primaryGradient : null,
+          color: useBrandGradient ? null : bg,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: onPressed == null
+              ? const []
+              : [
+                  BoxShadow(
+                    color: bg.withValues(alpha: 0.28),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
         ),
-        child: _child(bg),
-      )
-          : ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppSizes.radiusLg),
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            disabledBackgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            foregroundColor: fg,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
+          child: _child(fg),
         ),
-        child: _child(fg),
       ),
     );
   }

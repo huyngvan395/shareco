@@ -95,10 +95,21 @@ class CameraState extends Equatable {
 
   @override
   List<Object?> get props => [
-    isInitialized, isRecording, isPaused, facing.name, flashMode.name,
-    activeFilter.id, activeSpeed.value, durationLimit.label,
-    recordedDuration.inMilliseconds, beautyEnabled,
-    stickers.length, textOverlays.length, selectedMusic?.id,
-    recordedFilePath, errorMessage,
+    isInitialized,
+    isRecording,
+    isPaused,
+    facing.name,
+    flashMode.name,
+    activeFilter.id,
+    activeSpeed.value,
+    durationLimit.label,
+    recordedDuration.inMilliseconds,
+    beautyEnabled,
+    beautyEffects,
+    stickers,
+    textOverlays,
+    selectedMusic?.id,
+    recordedFilePath,
+    errorMessage,
   ];
 }

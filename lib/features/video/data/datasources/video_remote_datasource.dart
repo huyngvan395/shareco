@@ -239,15 +239,24 @@ class VideoRemoteDataSourceImpl implements VideoRemoteDataSource {
       final uid = SupabaseService.currentUserId;
       if (uid == null) throw ServerException('User not authenticated');
 
+      // Tách đường dẫn file vật lý và metadata hiệu ứng (#sc_fx=...) nếu có
+      final parts = localVideoPath.split('#sc_fx=');
+      final cleanLocalVideoPath = parts.first;
+      final fxFragment = parts.length > 1 ? parts.last : null;
+
       // ── Step 1 & 2: Upload video & thumbnail song song ─────────────────
       final thumbFuture = localThumbnailPath.isNotEmpty
           ? _cloudinary.uploadThumbnail(localThumbnailPath)
           : Future<String?>.value(null);
 
-      final videoUrl = await _cloudinary.uploadVideo(
-        localVideoPath,
-        onProgress: (p) => onProgress?.call(p * 0.85),
+      final rawVideoUrl = await _cloudinary.uploadVideo(
+        cleanLocalVideoPath,
+        onProgress: (p) => onProgress?.call((p * 0.88).clamp(0.01, 0.88)),
       );
+      final videoUrl = (fxFragment != null && fxFragment.isNotEmpty)
+          ? '${rawVideoUrl.split('#').first}#sc_fx=$fxFragment'
+          : rawVideoUrl;
+
       final thumbnailUrl = await thumbFuture;
       onProgress?.call(0.95);
 

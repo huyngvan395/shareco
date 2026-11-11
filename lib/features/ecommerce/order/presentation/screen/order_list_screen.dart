@@ -274,6 +274,10 @@ class _OrderCard extends StatelessWidget {
                   item: firstItem,
                   currency: order.currency,
                 ),
+              if (_hasTrackingPreview(order)) ...[
+                const SizedBox(height: AppSizes.sm),
+                _OrderTrackingStrip(order: order),
+              ],
               const SizedBox(height: AppSizes.md),
               Row(
                 children: [
@@ -324,6 +328,110 @@ class _OrderCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+  bool _hasTrackingPreview(EcommerceOrder order) {
+    return (order.currentLocation != null &&
+            order.currentLocation!.trim().isNotEmpty) ||
+        (order.trackingCode != null && order.trackingCode!.trim().isNotEmpty) ||
+        (order.shippingCarrier != null &&
+            order.shippingCarrier!.trim().isNotEmpty);
+  }
+}
+
+class _OrderTrackingStrip extends StatelessWidget {
+  final EcommerceOrder order;
+
+  const _OrderTrackingStrip({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final isShipping = order.status == 'shipping';
+    final isCompleted = order.status == 'completed';
+    final isCancelled =
+        order.status == 'cancelled' || order.status == 'refunded';
+
+    final accentColor = isCancelled
+        ? AppColors.error
+        : (isCompleted
+            ? AppColors.success
+            : (isShipping ? const Color(0xFF00A699) : AppColors.primary));
+
+    final carrierText = [
+      if (order.shippingCarrier != null &&
+          order.shippingCarrier!.trim().isNotEmpty)
+        order.shippingCarrier!.trim(),
+      if (order.trackingCode != null && order.trackingCode!.trim().isNotEmpty)
+        order.trackingCode!.trim(),
+    ].join(' · ');
+
+    final locationText = order.currentLocation?.trim() ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppSizes.radiusMd),
+        border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (carrierText.isNotEmpty)
+            Row(
+              children: [
+                Icon(
+                  isCompleted
+                      ? Icons.verified_rounded
+                      : Icons.local_shipping_outlined,
+                  size: 14,
+                  color: accentColor,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    carrierText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: accentColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          if (locationText.isNotEmpty) ...[
+            if (carrierText.isNotEmpty) const SizedBox(height: 3),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 14,
+                  color: accentColor,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    locationText,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

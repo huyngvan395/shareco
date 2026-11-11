@@ -8,18 +8,23 @@ class TextLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShaderMask(
       shaderCallback: (bounds) {
-        return const LinearGradient(colors: [
-          primaryOrange,
-          primaryPink,
-          primaryBlue,
-          primaryPurple,
-        ]).createShader(bounds);
+        return const LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primarySoft,
+            AppColors.secondary,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(bounds);
       },
       child: const Text(
         "ShareCo",
         style: TextStyle(
+          color: Colors.white,
           fontSize: 32,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
         ),
       )
     );

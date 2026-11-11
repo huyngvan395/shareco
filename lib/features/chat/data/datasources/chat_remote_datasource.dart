@@ -11,6 +11,13 @@ import '../models/chat_models.dart';
 abstract class ChatRemoteDataSource {
   Future<List<ConversationModel>> getConversations();
   Future<ConversationModel> getOrCreateConversation(String otherUserId);
+  Future<ConversationModel> getOrCreateShopConversation({
+    required String shopId,
+    required String ownerId,
+    String? shopName,
+    String? shopLogo,
+    bool? isShopVerified,
+  });
   Future<PaginatedResult<MessageModel>> getMessages({
     required String conversationId,
     int page = 0,
@@ -32,8 +39,23 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
   static const _msgLimit   = 30;
   final PresenceService _presenceService;
 
-  // Join: conversations + participants + their profiles + last_read_at
-  static const _convSelect = '''
+  // Join: conversations + shop + participants + their profiles + last_read_at
+  static const _convSelectWithShop = '''
+    *,
+    shops:shop_id (
+      id, shop_name, logo_path, is_verified, owner_id
+    ),
+    conversation_participants (
+      user_id,
+      last_read_at,
+      is_muted,
+      profiles:user_id (
+        id, username, display_name, avatar_url, is_verified
+      )
+    )
+  ''';
+
+  static const _convSelectFallback = '''
     *,
     conversation_participants (
       user_id,
@@ -74,15 +96,54 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
           .map((r) => r['conversation_id'] as String)
           .toList();
 
-      final rows = await SupabaseService.from(_convTable)
-          .select(_convSelect)
-          .inFilter('id', ids)
-          .order('updated_at', ascending: false) as List;
+      List rows;
+      try {
+        rows = await SupabaseService.from(_convTable)
+            .select(_convSelectWithShop)
+            .inFilter('id', ids)
+            .order('updated_at', ascending: false) as List;
+      } catch (e) {
+        debugPrint('Note: Fallback to basic conv select: $e');
+        rows = await SupabaseService.from(_convTable)
+            .select(_convSelectFallback)
+            .inFilter('id', ids)
+            .order('updated_at', ascending: false) as List;
+      }
 
-      return rows
+      final convList = rows
           .map((r) => ConversationModel.fromJson(
           r as Map<String, dynamic>, currentUserId: _uid))
           .toList();
+
+      // Batch enrich thông tin Shop cho các hội thoại Shop nếu thiếu logo/tên
+      final missingShopIds = convList
+          .where((c) => c.isShop && (c.shopLogo == null || c.shopLogo!.isEmpty) && c.shopId != null && c.shopId!.isNotEmpty)
+          .map((c) => c.shopId!)
+          .toSet()
+          .toList();
+
+      if (missingShopIds.isNotEmpty) {
+        try {
+          final shopRows = await SupabaseService.from('shops')
+              .select('id, shop_name, logo_path, is_verified, owner_id')
+              .inFilter('id', missingShopIds) as List;
+          final shopMap = {for (var s in shopRows) s['id']?.toString(): s};
+          for (var i = 0; i < convList.length; i++) {
+            final c = convList[i];
+            if (c.shopId != null && shopMap.containsKey(c.shopId)) {
+              final s = shopMap[c.shopId]!;
+              convList[i] = c.copyWith(
+                shopName: (c.shopName != null && c.shopName!.isNotEmpty) ? c.shopName : s['shop_name'] as String?,
+                shopLogo: (c.shopLogo != null && c.shopLogo!.isNotEmpty) ? c.shopLogo : s['logo_path'] as String?,
+                isShopVerified: c.isShopVerified || (s['is_verified'] == true),
+                shopOwnerId: c.shopOwnerId ?? s['owner_id'] as String?,
+              );
+            }
+          }
+        } catch (_) {}
+      }
+
+      return convList;
     } catch (e) {
       debugPrint('ERROR: $e');
       throw ServerException(e.toString());
@@ -100,15 +161,136 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
       ) as String;
 
       // Fetch full conversation with participants
-      final row = await SupabaseService.from(_convTable)
-          .select(_convSelect)
-          .eq('id', convId)
-          .single();
+      if (convId.isEmpty) {
+        throw const ServerException('Không thể tạo cuộc trò chuyện');
+      }
+
+      Map<String, dynamic> row;
+      try {
+        row = await SupabaseService.from(_convTable)
+            .select(_convSelectWithShop)
+            .eq('id', convId)
+            .single();
+      } catch (_) {
+        row = await SupabaseService.from(_convTable)
+            .select(_convSelectFallback)
+            .eq('id', convId)
+            .single();
+      }
 
       return ConversationModel.fromJson(
           row, currentUserId: _uid);
     } catch (e) {
       debugPrint('ERROR: $e');
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<ConversationModel> getOrCreateShopConversation({
+    required String shopId,
+    required String ownerId,
+    String? shopName,
+    String? shopLogo,
+    bool? isShopVerified,
+  }) async {
+    try {
+      String? convId;
+      try {
+        final res = await SupabaseService.rpc(
+          'get_or_create_shop_conversation',
+          params: {'p_shop_id': shopId},
+        );
+        convId = res?.toString();
+      } catch (e) {
+        debugPrint('Warning: get_or_create_shop_conversation RPC error: $e');
+      }
+
+      if (convId == null || convId.isEmpty) {
+        String effectiveOwnerId = ownerId;
+        if (effectiveOwnerId.isEmpty) {
+          try {
+            final shopRow = await SupabaseService.from('shops')
+                .select('owner_id')
+                .eq('id', shopId)
+                .single();
+            effectiveOwnerId = (shopRow['owner_id'] as String?) ?? '';
+          } catch (_) {}
+        }
+
+        if (effectiveOwnerId.isNotEmpty) {
+          // Fallback: gọi get_or_create_conversation với ownerId
+          convId = await SupabaseService.rpc(
+            'get_or_create_conversation',
+            params: {'other_user_id': effectiveOwnerId},
+          ) as String;
+
+          // Thử cập nhật gán shop_id vào conversation nếu cột có tồn tại
+          try {
+            await SupabaseService.from(_convTable)
+                .update({'type': 'shop', 'shop_id': shopId})
+                .eq('id', convId);
+          } catch (_) {}
+        }
+      }
+
+      if (convId == null || convId.isEmpty) {
+        throw const ServerException('Không thể tạo cuộc trò chuyện với Shop');
+      }
+
+      Map<String, dynamic> row;
+      try {
+        row = await SupabaseService.from(_convTable)
+            .select(_convSelectWithShop)
+            .eq('id', convId)
+            .single();
+      } catch (_) {
+        row = await SupabaseService.from(_convTable)
+            .select(_convSelectFallback)
+            .eq('id', convId)
+            .single();
+      }
+
+      final model = ConversationModel.fromJson(row, currentUserId: _uid);
+
+      String? effectiveShopName = (model.shopName != null && model.shopName!.isNotEmpty)
+          ? model.shopName
+          : shopName;
+      String? effectiveShopLogo = (model.shopLogo != null && model.shopLogo!.isNotEmpty)
+          ? model.shopLogo
+          : shopLogo;
+      String? effectiveOwnerId = (model.shopOwnerId != null && model.shopOwnerId!.isNotEmpty)
+          ? model.shopOwnerId
+          : ownerId;
+      bool effectiveVerified = model.isShopVerified || (isShopVerified ?? false);
+
+      // Nếu vẫn thiếu logo hoặc tên gian hàng, truy vấn trực tiếp bảng shops
+      if ((effectiveShopLogo == null || effectiveShopLogo.isEmpty || effectiveShopName == null || effectiveShopName.isEmpty) && shopId.isNotEmpty) {
+        try {
+          final sRow = await SupabaseService.from('shops')
+              .select('id, shop_name, logo_path, is_verified, owner_id')
+              .eq('id', shopId)
+              .maybeSingle();
+          if (sRow != null) {
+            effectiveShopName ??= sRow['shop_name'] as String?;
+            effectiveShopLogo ??= sRow['logo_path'] as String?;
+            if (sRow['is_verified'] == true) effectiveVerified = true;
+            effectiveOwnerId = (sRow['owner_id'] as String?) ?? effectiveOwnerId;
+          }
+        } catch (_) {}
+      }
+
+      // Enrich thông tin shop nếu chưa có từ query
+      return model.copyWith(
+        type: 'shop',
+        shopId: model.shopId ?? shopId,
+        shopName: effectiveShopName,
+        shopLogo: effectiveShopLogo,
+        isShopVerified: effectiveVerified,
+        shopOwnerId: effectiveOwnerId,
+      );
+    } catch (e) {
+      debugPrint('ERROR in getOrCreateShopConversation: $e');
       throw ServerException(e.toString());
     }
   }
@@ -245,7 +427,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         .asyncMap((row) async {
       if (row.isEmpty) throw const ServerException('Not found');
       final full = await SupabaseService.from(_convTable)
-          .select(_convSelect)
+          .select(_convSelectFallback)
           .eq('id', conversationId)
           .single();
       return ConversationModel.fromJson(

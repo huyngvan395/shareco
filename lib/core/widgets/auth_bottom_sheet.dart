@@ -28,21 +28,32 @@ import '../../features/auth/presentation/screen/register_screen.dart';
 import '../constants/app_colors.dart';
 
 class AuthBottomSheet {
-  static final GlobalKey<NavigatorState> _sheetNavKey = GlobalKey();
-  static void show(
-      BuildContext context, {
-        VoidCallback? pendingAction,
-      }) async {
-    if (pendingAction != null) {
-      sl<AuthNotifier>().setPendingAction(pendingAction);
-    }
-    showModalBottomSheet(
+  static Future<void> show(
+    BuildContext context, {
+    VoidCallback? pendingAction,
+  }) async {
+    final sheetNavKey = GlobalKey<NavigatorState>();
+    final authNotifier = sl<AuthNotifier>();
+    authNotifier.setPendingAction(pendingAction);
+
+    var completedAuth = false;
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       enableDrag: true,
-      builder: (_) => _AuthSheetScaffold(pendingAction: pendingAction, sheetNavKey: _sheetNavKey),
+      builder: (_) => _AuthSheetScaffold(
+        pendingAction: pendingAction,
+        sheetNavKey: sheetNavKey,
+        onAuthCompleted: () {
+          completedAuth = true;
+        },
+      ),
     );
+
+    if (!completedAuth && !authNotifier.isAuthenticated) {
+      authNotifier.setPendingAction(null);
+    }
   }
 }
 
@@ -51,8 +62,13 @@ class AuthBottomSheet {
 class _AuthSheetScaffold extends StatelessWidget {
   final VoidCallback? pendingAction;
   final GlobalKey<NavigatorState> sheetNavKey;
+  final VoidCallback onAuthCompleted;
 
-  const _AuthSheetScaffold({this.pendingAction, required this.sheetNavKey});
+  const _AuthSheetScaffold({
+    this.pendingAction,
+    required this.sheetNavKey,
+    required this.onAuthCompleted,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +84,12 @@ class _AuthSheetScaffold extends StatelessWidget {
         maxChildSize: 0.95,
         builder: (_, sc) => _SheetContainer(
           scrollController: sc,
-          child: _SheetNavigator(pendingAction: pendingAction, sheetNavKey: sheetNavKey, outerContext:scaffoldContext),
+          child: _SheetNavigator(
+            pendingAction: pendingAction,
+            sheetNavKey: sheetNavKey,
+            outerContext: scaffoldContext,
+            onAuthCompleted: onAuthCompleted,
+          ),
         ),
       ),
     );
@@ -79,10 +100,16 @@ class _AuthSheetScaffold extends StatelessWidget {
 
 class _SheetNavigator extends StatelessWidget {
   final VoidCallback? pendingAction;
-  final GlobalKey<NavigatorState> sheetNavKey ;
+  final GlobalKey<NavigatorState> sheetNavKey;
   final BuildContext outerContext;
+  final VoidCallback onAuthCompleted;
 
-  const _SheetNavigator({this.pendingAction, required this.sheetNavKey, required this.outerContext});
+  const _SheetNavigator({
+    this.pendingAction,
+    required this.sheetNavKey,
+    required this.outerContext,
+    required this.onAuthCompleted,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -90,38 +117,50 @@ class _SheetNavigator extends StatelessWidget {
       key: sheetNavKey,
       onGenerateRoute: (settings) {
         late Widget page;
+
+        void closeSheet() {
+          if (outerContext.mounted) {
+            Navigator.of(outerContext).pop();
+          }
+        }
+
         void onSuccess() {
-          Navigator.of(outerContext, rootNavigator: true).pop();
-          if (pendingAction != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => pendingAction!());
+          final authNotifier = sl<AuthNotifier>();
+          authNotifier.syncSession();
+          onAuthCompleted();
+          closeSheet();
+          final action = pendingAction ?? authNotifier.pendingAction;
+          authNotifier.setPendingAction(null);
+          if (action != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => action());
           }
         }
 
         switch (settings.name) {
           case '/login':
             page = LoginScreen(
-              onBack: () => Navigator.of(outerContext).pop(),
+              onBack: closeSheet,
               onNavigateToRegister: () =>
-                  sheetNavKey.currentState!.pushNamed('/register'),
-              onSuccess: () => onSuccess(),
+                  sheetNavKey.currentState?.pushNamed('/register'),
+              onSuccess: onSuccess,
             );
             break;
           case '/register':
             page = RegisterScreen(
-              onBack: () => Navigator.of(outerContext).pop(),
-              onNavigateToLogin: () => sheetNavKey.currentState!.pushNamed('/login'),
-              onSuccess: () => onSuccess(),
+              onBack: closeSheet,
+              onNavigateToLogin: () =>
+                  sheetNavKey.currentState?.pushNamed('/login'),
+              onSuccess: onSuccess,
             );
             break;
           default: // '/'
             page = GateScreen(
-              onBack:() => Navigator.of(outerContext).pop(),
+              onBack: closeSheet,
               onNavigateToLogin: () =>
-                  sheetNavKey.currentState!.pushNamed('/login'),
+                  sheetNavKey.currentState?.pushNamed('/login'),
               onNavigateToRegister: () =>
-                  sheetNavKey.currentState!.pushNamed('/register'),
-              onDismiss: () =>
-                  Navigator.of(outerContext, rootNavigator: true).pop(),
+                  sheetNavKey.currentState?.pushNamed('/register'),
+              onDismiss: closeSheet,
             );
         }
 
@@ -148,30 +187,35 @@ class _SheetNavigator extends StatelessWidget {
 class _SheetContainer extends StatelessWidget {
   final ScrollController scrollController;
   final Widget child;
-  const _SheetContainer(
-      {required this.scrollController, required this.child});
+  const _SheetContainer({
+    required this.scrollController,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: AppColors.bgDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: AppColors.surfaceSheet,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        border: Border(top: BorderSide(color: AppColors.borderSubtle)),
       ),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Container(
+              width: 42,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-        ),
-        Expanded(child: child),
-      ]),
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 }

@@ -4,6 +4,9 @@ import 'package:get_it/get_it.dart';
 import 'package:shareco/core/services/cloudinary/cloudinary_service.dart';
 import 'package:shareco/core/services/media/audio_recorder_service.dart';
 import 'package:shareco/core/services/media/image_picker_service.dart';
+import 'package:shareco/core/services/notifications/notification_preferences.dart';
+import 'package:shareco/core/services/notifications/push_notification_service.dart';
+import 'package:shareco/core/services/saved_videos_service.dart';
 import 'package:shareco/core/services/supabase/presence_service.dart';
 import 'package:shareco/features/chat/data/datasources/chat_remote_datasource.dart';
 import 'package:shareco/features/chat/data/repositories/chat_repository_impl.dart';
@@ -55,6 +58,7 @@ import '../features/ecommerce/order/data/datasources/order_remote_datasource.dar
 import '../features/ecommerce/order/data/repositories/order_repository_impl.dart';
 import '../features/ecommerce/order/domain/repositories/order_repository.dart';
 import '../features/ecommerce/order/domain/usecases/cancel_order_usecase.dart';
+import '../features/ecommerce/order/domain/usecases/confirm_order_delivered_usecase.dart';
 import '../features/ecommerce/order/domain/usecases/get_order_detail_usecase.dart';
 import '../features/ecommerce/order/domain/usecases/get_orders_usecase.dart';
 import '../features/ecommerce/order/presentation/bloc/order_detail/order_detail_bloc.dart';
@@ -182,10 +186,14 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton(() => GetOrdersUseCase(sl()));
   sl.registerLazySingleton(() => GetOrderDetailUseCase(sl()));
   sl.registerLazySingleton(() => CancelOrderUseCase(sl()));
+  sl.registerLazySingleton(() => ConfirmOrderDeliveredUseCase(sl()));
   sl.registerFactory(() => OrderListBloc(getOrdersUseCase: sl()));
   sl.registerFactory(
-    () =>
-        OrderDetailBloc(getOrderDetailUseCase: sl(), cancelOrderUseCase: sl()),
+    () => OrderDetailBloc(
+      getOrderDetailUseCase: sl(),
+      cancelOrderUseCase: sl(),
+      confirmOrderDeliveredUseCase: sl(),
+    ),
   );
 
   // Ecommerce: Shop
@@ -267,6 +275,15 @@ Future<void> setupInjector() async {
   sl.registerLazySingleton<NotificationRepository>(
     () => NotificationRepositoryImpl(remote: sl()),
   );
+  sl.registerLazySingleton(() => NotificationPreferences());
+  sl.registerLazySingleton(
+    () => PushNotificationService(
+      authNotifier: sl(),
+      preferences: sl(),
+      videoRepository: sl(),
+    ),
+  );
+  sl.registerLazySingleton(() => SavedVideosService(authNotifier: sl()));
 
   // Chat
   sl.registerLazySingleton<ChatRemoteDataSource>(
@@ -277,6 +294,7 @@ Future<void> setupInjector() async {
   );
   sl.registerLazySingleton(() => GetConversationsUseCase(sl()));
   sl.registerLazySingleton(() => GetOrCreateConversationUseCase(sl()));
+  sl.registerLazySingleton(() => GetOrCreateShopConversationUseCase(sl()));
   sl.registerLazySingleton(() => GetMessagesUseCase(sl()));
   sl.registerLazySingleton(() => SendMessageUseCase(sl()));
   sl.registerLazySingleton(() => DeleteMessageUseCase(sl()));

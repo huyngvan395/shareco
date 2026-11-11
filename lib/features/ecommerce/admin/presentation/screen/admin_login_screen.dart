@@ -7,9 +7,15 @@ import '../widgets/admin_ui_helpers.dart';
 
 class AdminSession {
   static String? loggedInRole; // 'admin' or 'shop'
+  static String? loggedInUserId;
   static String? loggedInShopId;
   static String? loggedInShopName;
+  static String? loggedInShopLogo;
+  static String? loggedInShopSlug;
+  static String? loggedInShopStatus;
   static String? loggedInEmail;
+  static String? loggedInUsername;
+  static List<Map<String, dynamic>> userShops = [];
 }
 
 class AdminLoginScreen extends StatefulWidget {
@@ -22,52 +28,36 @@ class AdminLoginScreen extends StatefulWidget {
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _emailCtrl = TextEditingController(text: 'admin@shareco.vn');
   final _passwordCtrl = TextEditingController(text: '123456');
-  final _regNameCtrl = TextEditingController();
-  final _regDescCtrl = TextEditingController();
-  final _regSlugCtrl = TextEditingController();
 
-  bool _isRegistering = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
-  String _selectedRoleType = 'admin';
+  String _selectedRoleType = 'admin'; // 'admin' | 'shop'
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
-    _regNameCtrl.dispose();
-    _regDescCtrl.dispose();
-    _regSlugCtrl.dispose();
     super.dispose();
-  }
-
-  void _onRegNameChanged(String val) {
-    final clean = val
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        .replaceAll(RegExp(r'\s+'), '-');
-    _regSlugCtrl.text = clean;
   }
 
   void _applyQuickDemo({
     required String role,
-    required String email,
+    required String account,
   }) {
     setState(() {
       _selectedRoleType = role;
-      _emailCtrl.text = email;
+      _emailCtrl.text = account;
       _passwordCtrl.text = '123456';
-      _isRegistering = false;
     });
   }
 
   Future<void> _handleLogin() async {
-    final email = _emailCtrl.text.trim();
+    final input = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (input.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập đầy đủ Email và Mật khẩu.')),
+        const SnackBar(content: Text('Vui lòng nhập đầy đủ Tài khoản/Email và Mật khẩu.')),
       );
       return;
     }
@@ -75,22 +65,14 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      User? user;
-      try {
-        final res = await Supabase.instance.client.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-        user = res.user;
-      } catch (e) {
-        debugPrint('Supabase sign-in fallback active: $e');
-      }
-
-      if (email.contains('admin') || _selectedRoleType == 'admin') {
+      // 1. Super Admin login
+      if (input.contains('admin') || _selectedRoleType == 'admin') {
         AdminSession.loggedInRole = 'admin';
-        AdminSession.loggedInEmail = email;
+        AdminSession.loggedInEmail = input;
         AdminSession.loggedInShopId = null;
         AdminSession.loggedInShopName = 'ShareCo Super Admin';
+        AdminSession.loggedInUserId = null;
+        AdminSession.userShops = [];
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -103,57 +85,117 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         return;
       }
 
-      // Brand / Shop Owner Login with resilient offline fallback
-      final keyword = email.split('@').first.toLowerCase();
-      List<dynamic> shopsResult = [];
+      // 2. Seller Portal Login (Người dùng có Shop)
+      final supabase = Supabase.instance.client;
+      String? matchedUserId;
+      String? matchedUsername;
+      String? matchedEmail = input;
 
+      // Thử đăng nhập Supabase Auth nếu input là email
       try {
-        final supabase = Supabase.instance.client;
-        if (user?.id != null) {
-          shopsResult = await supabase.from('shops').select().eq('owner_id', user!.id);
+        if (input.contains('@')) {
+          final res = await supabase.auth.signInWithPassword(
+            email: input,
+            password: password,
+          );
+          matchedUserId = res.user?.id;
+          matchedEmail = res.user?.email ?? input;
         }
-        if (shopsResult.isEmpty) {
-          shopsResult = await supabase.from('shops').select().ilike('shop_slug', '%$keyword%');
+      } catch (e) {
+        debugPrint('Supabase direct auth login note: $e');
+      }
+
+      // Nếu chưa có userId, tìm qua bảng profiles (hỗ trợ nhập username như huy123, chungngo)
+      if (matchedUserId == null) {
+        try {
+          final cleanInput = input.replaceAll('@', '').toLowerCase();
+          final profileRes = await supabase
+              .from('profiles')
+              .select('id, username, display_name')
+              .or('username.eq.$cleanInput,id.eq.$cleanInput')
+              .limit(1);
+
+          if (profileRes.isNotEmpty) {
+            matchedUserId = profileRes.first['id'] as String;
+            matchedUsername = profileRes.first['username'] as String?;
+          }
+        } catch (e) {
+          debugPrint('Error searching user profile: $e');
         }
-      } catch (_) {
-        // Fallback lookup in AdminFallbackStore when Supabase is paused/offline
+      }
+
+      // Fallback tìm userId theo demo username nếu offline
+      if (matchedUserId == null) {
+        final cleanInput = input.replaceAll('@', '').toLowerCase();
+        if (cleanInput.contains('huy')) {
+          matchedUserId = '3543c70c-7dba-4843-88a7-80f2d721d653';
+          matchedUsername = 'huy123';
+        } else if (cleanInput.contains('chung')) {
+          matchedUserId = '23263932-5a16-45d7-b31f-8680d988e2fc';
+          matchedUsername = 'chungngo';
+        }
+      }
+
+      // 3. Tìm các gian hàng mà người dùng này sở hữu
+      List<Map<String, dynamic>> shopsResult = [];
+      try {
+        if (matchedUserId != null) {
+          final res = await supabase
+              .from('shops')
+              .select('*')
+              .eq('owner_id', matchedUserId)
+              .order('created_at', ascending: false);
+          shopsResult = List<Map<String, dynamic>>.from(res);
+        }
+      } catch (e) {
+        debugPrint('Error querying user shops: $e');
+      }
+
+      // Fallback offline store nếu không kết nối được
+      if (shopsResult.isEmpty && matchedUserId != null) {
         shopsResult = AdminFallbackStore.shops.where((s) {
-          final slug = (s['shop_slug'] ?? '').toString().toLowerCase();
-          final name = (s['shop_name'] ?? '').toString().toLowerCase();
-          return slug.contains(keyword) || name.contains(keyword);
+          return s['owner_id'] == matchedUserId;
         }).toList();
       }
 
+      // Nếu vẫn rỗng nhưng user nhập tên shop (ví dụ "apple", "lorean")
       if (shopsResult.isEmpty) {
-        setState(() {
-          _isRegistering = true;
-          _regNameCtrl.text = email.split('@').first.toUpperCase();
-          _onRegNameChanged(_regNameCtrl.text);
-        });
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Tài khoản chưa có Gian hàng. Vui lòng hoàn tất thông tin dưới đây để mở Shop!',
-            ),
-            backgroundColor: AdminPalette.warning,
-          ),
-        );
-      } else {
-        final shop = shopsResult.first;
-        AdminSession.loggedInRole = 'shop';
-        AdminSession.loggedInEmail = email;
-        AdminSession.loggedInShopId = shop['id'];
-        AdminSession.loggedInShopName = shop['shop_name'];
+        final slugKey = input.toLowerCase().replaceAll(RegExp(r'\s+'), '-');
+        try {
+          final res = await supabase
+              .from('shops')
+              .select('*')
+              .or('shop_slug.ilike.%$slugKey%,shop_name.ilike.%$input%');
+          shopsResult = List<Map<String, dynamic>>.from(res);
+        } catch (_) {
+          shopsResult = AdminFallbackStore.shops.where((s) {
+            final slug = (s['shop_slug'] ?? '').toString().toLowerCase();
+            final name = (s['shop_name'] ?? '').toString().toLowerCase();
+            return slug.contains(slugKey) || name.contains(slugKey);
+          }).toList();
+        }
+      }
 
+      // 4. Xử lý kết quả theo tình huống thực tế
+      if (shopsResult.isEmpty) {
+        // Tình huống: Người dùng chưa có gian hàng
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đăng nhập đối tác [${shop['shop_name']}] thành công! 🏷️'),
-            backgroundColor: AdminPalette.success,
-          ),
+        _showNoShopDialog(matchedUsername ?? input);
+        return;
+      }
+
+      if (shopsResult.length == 1) {
+        // Tình huống: Có đúng 1 gian hàng -> Đăng nhập ngay
+        final shop = shopsResult.first;
+        _enterShopPortal(shop, matchedEmail ?? input, allShops: shopsResult);
+      } else {
+        // Tình huống: Người dùng sở hữu NHIỀU GIAN HÀNG -> Mở popup chọn gian hàng
+        if (!mounted) return;
+        _showShopPickerModal(
+          ownerName: matchedUsername ?? input,
+          email: matchedEmail ?? input,
+          shops: shopsResult,
         );
-        context.go(AdminRouter.products);
       }
     } catch (e) {
       if (!mounted) return;
@@ -170,82 +212,347 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     }
   }
 
-  Future<void> _handleRegisterBrand() async {
-    final name = _regNameCtrl.text.trim();
-    final slug = _regSlugCtrl.text.trim();
-    final desc = _regDescCtrl.text.trim();
+  void _enterShopPortal(
+    Map<String, dynamic> shop,
+    String email, {
+    required List<Map<String, dynamic>> allShops,
+  }) {
+    final status = shop['status'] ?? 'active';
+    final shopName = shop['shop_name'] ?? 'Gian hàng';
 
-    if (name.isEmpty || slug.isEmpty || desc.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng điền đầy đủ thông tin nhãn hàng.')),
-      );
-      return;
-    }
+    AdminSession.loggedInRole = 'shop';
+    AdminSession.loggedInUserId = shop['owner_id'];
+    AdminSession.loggedInShopId = shop['id'];
+    AdminSession.loggedInShopName = shopName;
+    AdminSession.loggedInShopLogo = shop['logo_path'];
+    AdminSession.loggedInShopSlug = shop['shop_slug'];
+    AdminSession.loggedInShopStatus = status;
+    AdminSession.loggedInEmail = email;
+    AdminSession.userShops = allShops;
 
-    setState(() => _isLoading = true);
+    if (!mounted) return;
 
-    try {
-      Map<String, dynamic> newShop;
-      try {
-        final supabase = Supabase.instance.client;
-        String ownerId;
-        final currentUser = supabase.auth.currentUser;
-        if (currentUser != null) {
-          ownerId = currentUser.id;
-        } else {
-          final profiles = await supabase.from('profiles').select('id').limit(1);
-          ownerId = profiles.first['id'];
-        }
-
-        final inserted = await supabase.from('shops').insert({
-          'owner_id': ownerId,
-          'shop_name': name,
-          'shop_slug': slug,
-          'description': desc,
-          'logo_path':
-              'https://images.unsplash.com/photo-1541746972996-4e0b0f43e01a?w=120&h=120&fit=crop',
-          'cover_path':
-              'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&h=400&fit=crop',
-          'status': 'active',
-        }).select();
-        newShop = Map<String, dynamic>.from(inserted.first);
-      } catch (_) {
-        newShop = {
-          'id': 'shop-${DateTime.now().millisecondsSinceEpoch}',
-          'shop_name': name,
-          'shop_slug': slug,
-          'description': desc,
-          'logo_path':
-              'https://images.unsplash.com/photo-1541746972996-4e0b0f43e01a?w=120&h=120&fit=crop',
-          'cover_path':
-              'https://images.unsplash.com/photo-1557683316-973673baf926?w=800&h=400&fit=crop',
-          'rating_avg': 5.0,
-          'rating_count': 0,
-          'follower_count': 0,
-          'is_verified': true,
-          'status': 'active',
-        };
-        AdminFallbackStore.shops.insert(0, newShop);
-      }
-
-      AdminSession.loggedInRole = 'shop';
-      AdminSession.loggedInEmail = _emailCtrl.text.trim();
-      AdminSession.loggedInShopId = newShop['id'];
-      AdminSession.loggedInShopName = newShop['shop_name'];
-
-      if (!mounted) return;
+    if (status == 'pending') {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Khởi tạo Nhãn hàng [${newShop['shop_name']}] thành công!'),
+          content: Text('Gian hàng [$shopName] đang chờ phê duyệt. Bạn có thể vào thiết lập sản phẩm trước! ⏳'),
+          backgroundColor: const Color(0xFFF97316),
+        ),
+      );
+    } else if (status == 'rejected') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gian hàng [$shopName] đã bị từ chối: ${shop['rejection_reason'] ?? "Chưa rõ lý do"} ❌'),
+          backgroundColor: AdminPalette.danger,
+        ),
+      );
+    } else if (status == 'blocked') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gian hàng [$shopName] đang bị tạm khóa do vi phạm chính sách! 🔒'),
+          backgroundColor: AdminPalette.danger,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đăng nhập Kênh Người Bán [$shopName] thành công! 🏪'),
           backgroundColor: AdminPalette.success,
         ),
       );
-      context.go(AdminRouter.products);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
+
+    context.go(AdminRouter.products);
+  }
+
+  void _showNoShopDialog(String identifier) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.storefront_outlined, color: Color(0xFFF59E0B)),
+            ),
+            const SizedBox(width: 12),
+            const Text('Chưa Có Gian Hàng', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          ],
+        ),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tài khoản [@$identifier] hiện chưa đăng ký gian hàng nào trên ShareCo.',
+                style: const TextStyle(fontSize: 14, height: 1.5, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AdminPalette.border),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.phone_android_rounded, color: AdminPalette.primary, size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Để mở shop bán hàng: Mở app ShareCo trên điện thoại -> Vào mục "Hồ Sơ" -> Chọn "Đăng Ký Bán Hàng" để gửi hồ sơ xét duyệt.',
+                        style: TextStyle(fontSize: 12.5, height: 1.4, color: AdminPalette.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdminPalette.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showShopPickerModal({
+    required String ownerName,
+    required String email,
+    required List<Map<String, dynamic>> shops,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AdminPalette.primary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.storefront_rounded, color: AdminPalette.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Chọn Gian Hàng Quản Lý', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                  Text(
+                    'Tài khoản @$ownerName sở hữu ${shops.length} gian hàng. Chọn shop để làm việc:',
+                    style: const TextStyle(fontSize: 12.5, color: AdminPalette.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: shops.map((s) {
+                final status = s['status'] ?? 'active';
+                final isPending = status == 'pending';
+                final isVerified = s['is_verified'] == true;
+                final logoUrl = s['logo_path'];
+                final shopName = s['shop_name'] ?? 'Gian hàng';
+                final province = s['pickup_province'] ?? '';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AdminPalette.border),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    leading: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.white,
+                        border: Border.all(color: AdminPalette.border),
+                        image: logoUrl != null
+                            ? DecorationImage(image: NetworkImage(logoUrl), fit: BoxFit.cover)
+                            : null,
+                      ),
+                      child: logoUrl == null
+                          ? const Icon(Icons.store_rounded, color: AdminPalette.textSecondary)
+                          : null,
+                    ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            shopName,
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isVerified) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.verified_rounded, size: 15, color: AdminPalette.info),
+                        ],
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '@${s['shop_slug'] ?? 'shop'}${province.isNotEmpty ? ' • 📍 $province' : ''}',
+                          style: const TextStyle(fontSize: 12, color: AdminPalette.textSecondary),
+                        ),
+                        const SizedBox(height: 3),
+                        if (isPending)
+                          const Text('⏳ Đang chờ duyệt', style: TextStyle(fontSize: 11, color: Color(0xFFF97316), fontWeight: FontWeight.w600))
+                        else
+                          const Text('✅ Đang hoạt động', style: TextStyle(fontSize: 11, color: AdminPalette.success, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    trailing: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _enterShopPortal(s, email, allShops: shops);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AdminPalette.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Vào Shop', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openDirectShopPicker() async {
+    // Lấy toàn bộ shops từ Supabase để người dùng demo bấm 1-click vào bất kỳ shop nào
+    setState(() => _isLoading = true);
+    List<Map<String, dynamic>> allShops = [];
+    try {
+      final res = await Supabase.instance.client
+          .from('shops')
+          .select('*, profiles:owner_id(username, display_name)')
+          .order('shop_name', ascending: true);
+      allShops = List<Map<String, dynamic>>.from(res);
+    } catch (_) {
+      allShops = List<Map<String, dynamic>>.from(AdminFallbackStore.shops);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.storefront_rounded, color: AdminPalette.primary),
+            SizedBox(width: 10),
+            Text('Chọn Gian Hàng Trực Tiếp', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: allShops.map((s) {
+                final logoUrl = s['logo_path'];
+                final shopName = s['shop_name'] ?? 'Gian hàng';
+                final owner = s['profiles'] is Map ? (s['profiles']['display_name'] ?? s['profiles']['username']) : null;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AdminPalette.border),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AdminPalette.border),
+                        image: logoUrl != null
+                            ? DecorationImage(image: NetworkImage(logoUrl), fit: BoxFit.cover)
+                            : null,
+                      ),
+                      child: logoUrl == null
+                          ? const Icon(Icons.store_rounded, color: AdminPalette.textSecondary)
+                          : null,
+                    ),
+                    title: Text(shopName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                    subtitle: Text(
+                      'Chủ shop: ${owner ?? s['owner_name'] ?? "Seller"} • @${s['shop_slug'] ?? "shop"}',
+                      style: const TextStyle(fontSize: 11.5, color: AdminPalette.textSecondary),
+                    ),
+                    trailing: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _enterShopPortal(s, 'seller@shareco.vn', allShops: allShops);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AdminPalette.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Quản Lý', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Đóng')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -254,7 +561,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       backgroundColor: const Color(0xFF090D16),
       body: Stack(
         children: [
-          // Ambient glowing orbs in background
           Positioned(
             top: -120,
             left: -100,
@@ -320,11 +626,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                                   Expanded(flex: 11, child: _buildHeroBanner(isWide: true)),
                                   Expanded(
                                     flex: 12,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(44),
-                                      child: _isRegistering
-                                          ? _buildRegisterForm()
-                                          : _buildLoginForm(),
+                                    child: Center(
+                                      child: SingleChildScrollView(
+                                        physics: const ClampingScrollPhysics(),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 36,
+                                          vertical: 28,
+                                        ),
+                                        child: _buildLoginForm(),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -334,10 +644,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               children: [
                                 _buildHeroBanner(isWide: false),
                                 Padding(
-                                  padding: const EdgeInsets.all(28),
-                                  child: _isRegistering
-                                      ? _buildRegisterForm()
-                                      : _buildLoginForm(),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 24,
+                                  ),
+                                  child: _buildLoginForm(),
                                 ),
                               ],
                             ),
@@ -370,7 +681,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 topRight: Radius.circular(28),
               ),
       ),
-      padding: EdgeInsets.all(isWide ? 44 : 28),
+      padding: EdgeInsets.symmetric(
+        horizontal: isWide ? 36 : 24,
+        vertical: isWide ? 32 : 24,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -381,7 +695,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.16),
                       borderRadius: BorderRadius.circular(14),
@@ -390,10 +704,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     child: const Icon(
                       Icons.shopping_bag_rounded,
                       color: Colors.white,
-                      size: 28,
+                      size: 26,
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -401,62 +715,62 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         'SHARECO COMMERCE',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.2,
                         ),
                       ),
                       Text(
-                        'Social Video & E-Commerce Ecosystem',
+                        'TikTok-Style Commerce Portal',
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 12,
+                          fontSize: 11.5,
                         ),
                       ),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 24),
               const Text(
-                'Trung Tâm Quản Trị\nSàn Thương Mại & Video',
+                'Cổng Quản Trị Hệ Thống\n& Kênh Người Bán',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 30,
+                  fontSize: 26,
                   fontWeight: FontWeight.w900,
-                  height: 1.2,
+                  height: 1.25,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Text(
-                'Quản lý tập trung hệ sinh thái Nhãn hàng chính hãng, Sản phẩm gắn thẻ trên Video TikTok-style và Vận hành đơn hàng thời gian thực.',
+                'Đăng nhập với vai trò Quản Trị Viên Sàn hoặc Nhà Bán Hàng (Người dùng đã đăng ký gian hàng) để quản lý kho hàng, sản phẩm và theo dõi đơn giao.',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 14,
-                  height: 1.55,
+                  fontSize: 13,
+                  height: 1.5,
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               _buildFeatureRow(
-                Icons.verified_rounded,
-                'Phân quyền đa tầng: Super Admin & Đối tác Brand',
+                Icons.admin_panel_settings_rounded,
+                'Super Admin: Phê duyệt gian hàng, kiểm duyệt người dùng, cấm live, ban vi phạm',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _buildFeatureRow(
-                Icons.local_mall_rounded,
-                'Đồng bộ trực tiếp với tính năng Gắn Sản Phẩm trên Video App',
+                Icons.storefront_rounded,
+                'Kênh Người Bán: Dành cho người dùng đã đăng ký shop, quản lý sản phẩm & đơn hàng',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _buildFeatureRow(
-                Icons.analytics_rounded,
-                'Thống kê tồn kho, doanh thu và trạng thái đơn hàng tức thì',
+                Icons.swap_horiz_rounded,
+                'Hỗ trợ Đa Gian Hàng: Tự động nhận diện và chuyển đổi nhanh giữa các shop sở hữu',
               ),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(14),
@@ -464,14 +778,14 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             ),
             child: const Row(
               children: [
-                Icon(Icons.tips_and_updates_rounded, color: Color(0xFFFBBF24), size: 20),
+                Icon(Icons.tips_and_updates_rounded, color: Color(0xFFFBBF24), size: 18),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Mẹo: Chọn nhanh tài khoản Demo ở khung bên phải để trải nghiệm ngay mà không cần gõ mật khẩu.',
+                    'Lưu ý: Gian hàng được khởi tạo khi người dùng nộp đơn "Đăng ký bán hàng" trên ứng dụng ShareCo.',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: 11.5,
                       height: 1.4,
                     ),
                   ),
@@ -493,15 +807,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             color: Colors.white.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: const Color(0xFFC4B5FD), size: 16),
+          child: Icon(icon, color: const Color(0xFFC4B5FD), size: 15),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
             text,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -511,25 +825,29 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   }
 
   Widget _buildLoginForm() {
+    final isShopRole = _selectedRoleType == 'shop';
+
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Đăng Nhập Cổng Quản Trị',
-          style: TextStyle(
+        Text(
+          isShopRole ? 'Kênh Người Bán (Seller Portal)' : 'Cổng Quản Trị Super Admin',
+          style: const TextStyle(
             color: Colors.white,
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.4,
           ),
         ),
-        const SizedBox(height: 6),
-        const Text(
-          'Chọn vai trò truy cập hoặc bấm vào thẻ Demo nhanh bên dưới.',
-          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+        const SizedBox(height: 4),
+        Text(
+          isShopRole
+              ? 'Đăng nhập bằng tài khoản ShareCo (Email hoặc Username) đã mở shop.'
+              : 'Dành cho quản trị viên sàn ShareCo phê duyệt & kiểm duyệt hệ thống.',
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5, height: 1.35),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 16),
 
         // Role Selector Tabs
         Container(
@@ -545,42 +863,47 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                   role: 'admin',
                   icon: Icons.admin_panel_settings_rounded,
                   label: 'Super Admin',
-                  defaultEmail: 'admin@shareco.vn',
+                  defaultAccount: 'admin@shareco.vn',
                 ),
               ),
               Expanded(
                 child: _buildRoleTab(
                   role: 'shop',
                   icon: Icons.storefront_rounded,
-                  label: 'Đối Tác Nhãn Hàng',
-                  defaultEmail: 'loreal@brand.com',
+                  label: 'Người Bán / Shop',
+                  defaultAccount: 'huy123',
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 16),
 
-        // Email Field
-        const Text(
-          'EMAIL ĐĂNG NHẬP',
-          style: TextStyle(
+        // Account Input Field
+        Text(
+          isShopRole ? 'EMAIL HOẶC USERNAME' : 'EMAIL SUPER ADMIN',
+          style: const TextStyle(
             color: Color(0xFF94A3B8),
             fontSize: 11,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.6,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextField(
           controller: _emailCtrl,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             filled: true,
             fillColor: const Color(0xFF1E293B),
-            hintText: _selectedRoleType == 'admin' ? 'admin@shareco.vn' : 'loreal@brand.com',
+            hintText: isShopRole ? 'VD: huy123 hoặc chungngo' : 'admin@shareco.vn',
             hintStyle: const TextStyle(color: Color(0xFF64748B)),
-            prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF94A3B8), size: 19),
+            prefixIcon: Icon(
+              isShopRole ? Icons.person_outline_rounded : Icons.alternate_email_rounded,
+              color: const Color(0xFF94A3B8),
+              size: 19,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF334155)),
@@ -595,7 +918,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // Password Field
         const Text(
@@ -607,13 +930,14 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             letterSpacing: 0.6,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextField(
           controller: _passwordCtrl,
           obscureText: _obscurePassword,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           onSubmitted: (_) => _handleLogin(),
           decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             filled: true,
             fillColor: const Color(0xFF1E293B),
             hintText: '••••••••',
@@ -641,12 +965,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
 
         // Submit Button
         SizedBox(
           width: double.infinity,
-          height: 50,
+          height: 44,
           child: ElevatedButton(
             onPressed: _isLoading ? null : _handleLogin,
             style: ElevatedButton.styleFrom(
@@ -661,60 +985,78 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                     width: 20,
                     child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                   )
-                : const Row(
+                : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Truy Cập Hệ Thống',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        isShopRole ? 'Vào Kênh Người Bán' : 'Vào Cổng Super Admin',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                       ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.arrow_forward_rounded, size: 18),
                     ],
                   ),
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 16),
 
-        // 1-Click Demo Account Chips
+        // 1-Click Demo Quick Access
         const Text(
-          'CHỌN NHANH TÀI KHOẢN DEMO (1-CLICK):',
+          'ĐĂNG NHẬP NHANH TÀI KHOẢN HỆ THỐNG (1-CLICK):',
           style: TextStyle(
             color: Color(0xFF94A3B8),
-            fontSize: 11,
+            fontSize: 10.5,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 6,
+          runSpacing: 6,
           children: [
             _buildDemoChip(
               label: '👑 Super Admin',
               role: 'admin',
-              email: 'admin@shareco.vn',
+              account: 'admin@shareco.vn',
             ),
             _buildDemoChip(
-              label: "💄 L'Oreal Paris",
+              label: '🏪 Huy IT (5 Shop: Đồ Nam, Apple...)',
               role: 'shop',
-              email: 'loreal@brand.com',
+              account: 'huy123',
             ),
             _buildDemoChip(
-              label: '🌿 The Cocoon',
+              label: "💄 Chung Ngô (Shop L'orean)",
               role: 'shop',
-              email: 'cocoon@brand.com',
+              account: 'chungngo',
             ),
-            _buildDemoChip(
-              label: '💧 CeraVe',
-              role: 'shop',
-              email: 'cerave@brand.com',
-            ),
-            _buildDemoChip(
-              label: '☀️ Anessa',
-              role: 'shop',
-              email: 'anessa@brand.com',
+            // Nút mở chọn nhanh bất kỳ gian hàng nào trên hệ thống
+            InkWell(
+              onTap: _openDirectShopPicker,
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AdminPalette.accent.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AdminPalette.accent.withValues(alpha: 0.4)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.search_rounded, size: 13, color: AdminPalette.accent),
+                    SizedBox(width: 4),
+                    Text(
+                      'Tất cả Shop trên sàn ↗',
+                      style: TextStyle(
+                        color: AdminPalette.accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -726,15 +1068,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     required String role,
     required IconData icon,
     required String label,
-    required String defaultEmail,
+    required String defaultAccount,
   }) {
     final isSelected = _selectedRoleType == role;
     return InkWell(
-      onTap: () => _applyQuickDemo(role: role, email: defaultEmail),
+      onTap: () => _applyQuickDemo(role: role, account: defaultAccount),
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 11),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? AdminPalette.primaryLight : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
@@ -765,11 +1107,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   Widget _buildDemoChip({
     required String label,
     required String role,
-    required String email,
+    required String account,
   }) {
-    final isCurrent = _emailCtrl.text.trim() == email && _selectedRoleType == role;
+    final isCurrent = _emailCtrl.text.trim() == account && _selectedRoleType == role;
     return InkWell(
-      onTap: () => _applyQuickDemo(role: role, email: email),
+      onTap: () => _applyQuickDemo(role: role, account: account),
       borderRadius: BorderRadius.circular(999),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -791,101 +1133,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildRegisterForm() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-              onPressed: () => setState(() => _isRegistering = false),
-            ),
-            const SizedBox(width: 4),
-            const Expanded(
-              child: Text(
-                'Đăng Ký Đối Tác Nhãn Hàng 🏷️',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Tài khoản (${_emailCtrl.text}) chưa có cửa hàng. Khởi tạo gian hàng chính hãng ngay:',
-          style: const TextStyle(color: Color(0xFFFBBF24), fontSize: 12.5),
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _regNameCtrl,
-          onChanged: _onRegNameChanged,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: 'Tên Nhãn Hàng / Official Store',
-            labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-            filled: true,
-            fillColor: const Color(0xFF1E293B),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _regSlugCtrl,
-          readOnly: true,
-          style: const TextStyle(color: Color(0xFF94A3B8)),
-          decoration: InputDecoration(
-            labelText: 'Đường dẫn định danh (Slug)',
-            labelStyle: const TextStyle(color: Color(0xFF64748B)),
-            filled: true,
-            fillColor: const Color(0xFF0F172A),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _regDescCtrl,
-          maxLines: 3,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: 'Mô tả & Cam kết chính hãng',
-            labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
-            filled: true,
-            fillColor: const Color(0xFF1E293B),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        const SizedBox(height: 22),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _handleRegisterBrand,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AdminPalette.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : const Text(
-                    'Hoàn Tất & Mở Gian Hàng',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-          ),
-        ),
-      ],
     );
   }
 }

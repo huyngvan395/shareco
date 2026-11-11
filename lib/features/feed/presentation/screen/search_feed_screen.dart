@@ -1,5 +1,6 @@
 // features/feed/presentation/screen/search_feed_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/utils/video_controller_cache.dart';
@@ -21,19 +22,23 @@ class SearchFeedScreen extends StatefulWidget {
 }
 
 class _SearchFeedScreenState extends State<SearchFeedScreen> {
-  final _cache = VideoControllerCache();
+  final _cache = VideoControllerCache(maxControllers: 3);
   late final PageController _pageCtrl;
   int _activePage = 0;
+  Timer? _preloadDebounce;
 
   @override
   void initState() {
     super.initState();
-    _activePage = widget.initialIndex;
-    _pageCtrl = PageController(initialPage: widget.initialIndex);
+    VideoControllerCache.pauseAllGlobal(except: _cache);
+    final count = widget.videos.length;
+    _activePage = count > 0 ? widget.initialIndex.clamp(0, count - 1) : 0;
+    _pageCtrl = PageController(initialPage: _activePage);
   }
 
   @override
   void dispose() {
+    _preloadDebounce?.cancel();
     _pageCtrl.dispose();
     _cache.disposeAll();
     super.dispose();
@@ -42,14 +47,14 @@ class _SearchFeedScreenState extends State<SearchFeedScreen> {
   void _onPageChanged(int page) {
     _cache.pauseAll();
     setState(() => _activePage = page);
-    _preloadAt(page + 1);
-    _preloadAt(page + 2);
-  }
-
-  void _preloadAt(int idx) {
-    final videos = widget.videos;
-    if (idx < 0 || idx >= videos.length) return;
-    _cache.getOrCreate(videos[idx].videoPath);
+    _preloadDebounce?.cancel();
+    _preloadDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      final next = page + 1;
+      if (next >= 0 && next < widget.videos.length) {
+        _cache.preload(widget.videos[next].videoPath);
+      }
+    });
   }
 
   @override
@@ -68,10 +73,11 @@ class _SearchFeedScreenState extends State<SearchFeedScreen> {
             itemBuilder: (_, i) {
               final video = videos[i];
               return VideoItem(
-                key: ValueKey(video.id),
+                key: ValueKey('search_${video.id}'),
                 video: video,
+                cache: _cache,
                 isActive: i == _activePage,
-                controllerFuture: _cache.getOrCreate(video.videoPath),
+                shouldPrepare: (i - _activePage).abs() <= 1,
               );
             },
           ),
@@ -102,8 +108,11 @@ class _BackButton extends StatelessWidget {
           color: Colors.black54,
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Colors.white, size: 18),
+        child: const Icon(
+          Icons.arrow_back_ios_new_rounded,
+          color: Colors.white,
+          size: 18,
+        ),
       ),
     );
   }

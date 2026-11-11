@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/constants/app_sizes.dart';
+import '../../../../../core/helpers/require_auth.dart';
+import '../../../../../core/notifier/auth_notifier.dart';
 import '../../../../../core/utils/storage_image.dart';
 import '../../../../../di/injector.dart';
 import '../../../cart/presentation/bloc/cart_bloc.dart';
@@ -46,6 +48,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   String? _selectedBrand;
   String? _selectedShopId;
   int _activeTabIndex = 0;
+  String? _lastAuthUserId;
 
   @override
   void initState() {
@@ -54,6 +57,17 @@ class _ProductListScreenState extends State<ProductListScreen> {
     _bloc = sl<ProductListBloc>()
       ..add(ProductListRequested(brand: _selectedBrand));
     _cartBloc = sl<CartBloc>()..add(const CartRequested());
+    final auth = sl<AuthNotifier>();
+    _lastAuthUserId = auth.userId;
+    auth.addListener(_onAuthChanged);
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    final auth = sl<AuthNotifier>();
+    if (_lastAuthUserId == auth.userId) return;
+    _lastAuthUserId = auth.userId;
+    _cartBloc.add(const CartRequested());
   }
 
   @override
@@ -73,6 +87,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   @override
   void dispose() {
+    sl<AuthNotifier>().removeListener(_onAuthChanged);
     _searchCtrl.dispose();
     _bloc.close();
     _cartBloc.close();
@@ -320,11 +335,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
                                     _loadProducts();
                                   },
                                   cartCount: cartCount,
-                                  onCartTap: () async {
-                                    await context.push('/cart');
-                                    if (mounted) {
-                                      _cartBloc.add(const CartRequested());
-                                    }
+                                  onCartTap: () {
+                                    context.requireAuth(() async {
+                                      await context.push('/cart');
+                                      if (mounted) {
+                                        _cartBloc.add(const CartRequested());
+                                      }
+                                    });
                                   },
                                   onCameraTap: _onCameraTap,
                                 );
@@ -600,33 +617,64 @@ class _ShopHeader extends StatelessWidget {
               child: Row(
                 children: [
                   const SizedBox(width: 12),
-                  const Icon(Icons.search, color: Colors.black54, size: 22),
+                  const Icon(Icons.search, color: Colors.black54, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: ValueListenableBuilder<TextEditingValue>(
                       valueListenable: controller,
-                      builder: (_, value, __) => TextField(
-                        controller: controller,
-                        onSubmitted: onSearch,
-                        decoration: InputDecoration(
-                          hintText: 'Nhập sản phẩm bạn muốn tìm kiếm',
-                          hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                          suffixIcon: value.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear, size: 18),
-                                  onPressed: onClear,
-                                )
-                              : null,
-                        ),
+                      builder: (_, value, _) => Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: controller,
+                              onSubmitted: onSearch,
+                              textAlignVertical: TextAlignVertical.center,
+                              cursorColor: const Color(0xFFEE4D2D),
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontSize: 13.5,
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: 'Tìm sản phẩm...',
+                                hintStyle: TextStyle(
+                                  color: Colors.black45,
+                                  fontSize: 13,
+                                ),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                errorBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                isCollapsed: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (value.text.isNotEmpty) ...[
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: onClear,
+                              behavior: HitTestBehavior.opaque,
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.cancel_rounded,
+                                  size: 16,
+                                  color: Colors.black38,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
                   GestureDetector(
                     onTap: onCameraTap,
-                    child: const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 22),
+                    child: const Icon(Icons.camera_alt_outlined, color: Colors.black54, size: 20),
                   ),
                   const SizedBox(width: 8),
                   GestureDetector(

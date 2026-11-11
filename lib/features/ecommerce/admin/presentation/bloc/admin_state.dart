@@ -10,6 +10,7 @@ class AdminState extends Equatable {
   final List<Product> products;
   final List<EcommerceOrder> orders;
   final List<Map<String, dynamic>> videos;
+  final List<Map<String, dynamic>> users;
   final String? errorMessage;
 
   const AdminState({
@@ -18,6 +19,7 @@ class AdminState extends Equatable {
     this.products = const [],
     this.orders = const [],
     this.videos = const [],
+    this.users = const [],
     this.errorMessage,
   });
 
@@ -27,6 +29,7 @@ class AdminState extends Equatable {
     List<Product>? products,
     List<EcommerceOrder>? orders,
     List<Map<String, dynamic>>? videos,
+    List<Map<String, dynamic>>? users,
     String? errorMessage,
   }) {
     return AdminState(
@@ -35,10 +38,11 @@ class AdminState extends Equatable {
       products: products ?? this.products,
       orders: orders ?? this.orders,
       videos: videos ?? this.videos,
+      users: users ?? this.users,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 
   @override
-  List<Object?> get props => [status, shops, products, orders, videos, errorMessage];
+  List<Object?> get props => [status, shops, products, orders, videos, users, errorMessage];
 }

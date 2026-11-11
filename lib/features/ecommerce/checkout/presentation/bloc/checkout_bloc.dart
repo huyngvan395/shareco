@@ -26,6 +26,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       address: event.address,
       note: event.note,
       discountAmount: event.discountAmount,
+      shippingAmount: event.shippingAmount,
+      shippingService: event.shippingService,
+      shippingCarrier: event.shippingCarrier,
     );
 
     result.fold(
@@ -46,6 +49,9 @@ class CheckoutBloc extends Bloc<CheckoutEvent, CheckoutState> {
       qty: event.qty,
       note: event.note,
       discountAmount: event.discountAmount,
+      shippingAmount: event.shippingAmount,
+      shippingService: event.shippingService,
+      shippingCarrier: event.shippingCarrier,
     );
 
     result.fold(

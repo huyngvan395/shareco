@@ -3,13 +3,17 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shareco/core/services/notifications/push_notification_service.dart';
 import 'package:shareco/core/services/supabase/presence_service.dart';
+import 'package:shareco/core/utils/storage_image.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_event.dart';
 import 'package:shareco/features/chat/presentation/bloc/conversation_state.dart';
+import 'package:shareco/features/notification/presentation/screen/notification_screen.dart';
 import 'package:shareco/routes/app_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/supabase/index.dart';
 import '../../../../di/injector.dart';
+import '../../domain/entities/chat_entities.dart';
 import '../bloc/conversation_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -39,6 +43,7 @@ class _ChatView extends StatefulWidget {
 class _ChatViewState extends State<_ChatView> {
   final _searchCtrl = TextEditingController();
   bool _searchFocused = false;
+  int _selectedCategoryTab = 0; // 0: Tất cả, 1: Bạn bè, 2: Tin nhắn Shop
 
   @override
   void dispose() {
@@ -76,7 +81,50 @@ class _ChatViewState extends State<_ChatView> {
             ),
           ),
           actions: [
+            ListenableBuilder(
+              listenable: sl<PushNotificationService>(),
+              builder: (context, _) {
+                final unread = sl<PushNotificationService>().unreadTotal;
+                return IconButton(
+                  tooltip: 'Trung tâm thông báo',
+                  onPressed: () => _openNotifications(context, 'all'),
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Colors.black87,
+                      ),
+                      if (unread > 0)
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              unread > 99 ? '99+' : '$unread',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
             IconButton(
+              tooltip: 'Tin nhắn mới',
               icon: const Icon(Icons.edit_outlined, color: Colors.black87),
               onPressed: () => _showNewChatSheet(context),
             ),
@@ -194,141 +242,344 @@ class _ChatViewState extends State<_ChatView> {
     ),
   );
 
-  Widget _buildActivityRow() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Container(
-        color: Colors.white,
-        child: Column(
+  void _openNotifications(BuildContext context, String category) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (_) => NotificationScreen(initialCategory: category),
+      ),
+    );
+  }
+
+  Widget _buildActivityRow() {
+    final push = sl<PushNotificationService>();
+    return ListenableBuilder(
+      listenable: push,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            color: Colors.white,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Hoạt động',
+                        style: TextStyle(
+                          color: Colors.black38,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => _openNotifications(context, 'all'),
+                        child: const Text(
+                          'Xem tất cả',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 80,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    children: [
+                      _ActivityBubble(
+                        icon: Icons.favorite_rounded,
+                        label: 'Lượt thích',
+                        color: AppColors.like,
+                        count: push.unreadLikes,
+                        onTap: () => _openNotifications(context, 'likes'),
+                      ),
+                      _ActivityBubble(
+                        icon: Icons.chat_bubble_rounded,
+                        label: 'Bình luận',
+                        color: AppColors.secondary,
+                        count: push.unreadComments,
+                        onTap: () => _openNotifications(context, 'comments'),
+                      ),
+                      _ActivityBubble(
+                        icon: Icons.alternate_email_rounded,
+                        label: 'Nhắc đến',
+                        color: const Color(0xFF8B5CF6),
+                        count: push.unreadMentions,
+                        onTap: () => _openNotifications(context, 'mentions'),
+                      ),
+                      _ActivityBubble(
+                        icon: Icons.sensors_rounded,
+                        label: 'Follow & Live',
+                        color: AppColors.primary,
+                        count: push.unreadFollowsAndLive,
+                        onTap: () =>
+                            _openNotifications(context, 'follows_live'),
+                      ),
+                      _ActivityBubble(
+                        icon: Icons.local_shipping_rounded,
+                        label: 'Đơn hàng & Ví',
+                        color: const Color(0xFFF97316),
+                        count: push.unreadOrdersAndWallet,
+                        onTap: () => _openNotifications(context, 'orders'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+          const Divider(color: Color(0xFFE0E0E0), height: 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList(BuildContext ctx, ConversationListLoaded state) {
+    final uid = SupabaseService.currentUserId ?? '';
+    final filteredConversations = switch (_selectedCategoryTab) {
+      1 => state.conversations.where((c) => !c.isShop).toList(),
+      2 => state.conversations.where((c) => c.isShop).toList(),
+      _ => state.conversations,
+    };
+
+    return Column(
+      children: [
+        _buildChatCategoryTabs(state.conversations),
+        const Divider(color: Color(0xFFEFEFEF), height: 1),
+        Expanded(
+          child: filteredConversations.isEmpty
+              ? _buildEmptyStateForCategory()
+              : RefreshIndicator(
+                  onRefresh: () async => ctx.read<ConversationBloc>().add(
+                    const ConversationRefreshRequested(),
+                  ),
+                  color: AppColors.primary,
+                  backgroundColor: Colors.white,
+                  child: ListView.separated(
+                    itemCount: filteredConversations.length,
+                    separatorBuilder: (_, __) => const Divider(
+                      height: 1,
+                      indent: 74,
+                      color: Color(0xFFF5F5F5),
+                    ),
+                    itemBuilder: (_, i) {
+                      final conv = filteredConversations[i];
+                      return _ConvTile(
+                        conv: conv,
+                        currentUserId: uid,
+                        time: _timeAgo(conv.lastMessageAt ?? conv.updatedAt),
+                        onTap: () => context
+                            .push(Routes.messages, extra: conv)
+                            .then((_) {
+                              if (ctx.mounted) {
+                                ctx.read<ConversationBloc>().add(
+                                  const ConversationRefreshRequested(),
+                                );
+                              }
+                            }),
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatCategoryTabs(List<ConversationEntity> allList) {
+    final unreadAll = allList.where((c) => c.hasUnread).length;
+    final unreadDirect = allList.where((c) => !c.isShop && c.hasUnread).length;
+    final unreadShop = allList.where((c) => c.isShop && c.hasUnread).length;
+    final shopCount = allList.where((c) => c.isShop).length;
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+      child: Row(
+        children: [
+          _buildFilterPill(
+            index: 0,
+            label: 'Tất cả',
+            unreadCount: unreadAll,
+          ),
+          const SizedBox(width: 8),
+          _buildFilterPill(
+            index: 1,
+            label: 'Bạn bè',
+            unreadCount: unreadDirect,
+          ),
+          const SizedBox(width: 8),
+          _buildFilterPill(
+            index: 2,
+            icon: Icons.storefront_rounded,
+            label: shopCount > 0 ? 'Shop ($shopCount)' : 'Tin nhắn Shop',
+            unreadCount: unreadShop,
+            isShopTab: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterPill({
+    required int index,
+    required String label,
+    IconData? icon,
+    int unreadCount = 0,
+    bool isShopTab = false,
+  }) {
+    final isSelected = _selectedCategoryTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedCategoryTab = index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isShopTab ? const Color(0xFFFF5722) : const Color(0xFF1E232E))
+              : const Color(0xFFF2F4F7),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected
+                ? Colors.transparent
+                : Colors.black.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-              child: Row(
-                children: [
-                  const Text(
-                    'Hoạt động',
-                    style: TextStyle(
-                      color: Colors.black38,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text(
-                      'Xem tất cả',
-                      style: TextStyle(color: AppColors.primary, fontSize: 12),
-                    ),
-                  ),
-                ],
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 15,
+                color: isSelected ? Colors.white : Colors.black54,
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.black87,
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
-            SizedBox(
-              height: 76,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: [
-                  _ActivityBubble(
-                    icon: Icons.favorite,
-                    label: 'Thích',
-                    color: AppColors.like,
-                    count: 42,
+            if (unreadCount > 0) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  unreadCount > 99 ? '99+' : '$unreadCount',
+                  style: TextStyle(
+                    color: isSelected
+                        ? (isShopTab ? const Color(0xFFFF5722) : AppColors.primary)
+                        : Colors.white,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
                   ),
-                  _ActivityBubble(
-                    icon: Icons.chat_bubble,
-                    label: 'Bình luận',
-                    color: AppColors.secondary,
-                    count: 8,
-                  ),
-                  _ActivityBubble(
-                    icon: Icons.alternate_email,
-                    label: 'Nhắc đến',
-                    color: Colors.amber,
-                    count: 3,
-                  ),
-                  _ActivityBubble(
-                    icon: Icons.person_add,
-                    label: 'Theo dõi',
-                    color: AppColors.primary,
-                    count: 12,
-                  ),
-                  _ActivityBubble(
-                    icon: Icons.share,
-                    label: 'Chia sẻ',
-                    color: Colors.green,
-                    count: 5,
-                  ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
+            ],
           ],
         ),
       ),
-      const Divider(color: Color(0xFFE0E0E0), height: 1),
-    ],
-  );
+    );
+  }
 
-  Widget _buildList(BuildContext ctx, ConversationListLoaded state) {
-    if (state.conversations.isEmpty) {
+  Widget _buildEmptyStateForCategory() {
+    if (_selectedCategoryTab == 2) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFF1EB),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: Color(0xFFFF5722),
+                  size: 38,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Chưa có tin nhắn Shop nào',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Trò chuyện với các shop bán hàng để nhận tư vấn sản phẩm, đơn hàng và ưu đãi đặc quyền.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black45,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_selectedCategoryTab == 1) {
       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.chat_bubble_outline_rounded,
-              color: Colors.black12,
-              size: 64,
-            ),
-            SizedBox(height: 16),
+            Icon(Icons.people_outline_rounded, color: Colors.black12, size: 64),
+            SizedBox(height: 14),
             Text(
-              'Chưa có cuộc hội thoại nào',
-              style: TextStyle(color: Colors.black38, fontSize: 16),
-            ),
-            SizedBox(height: 8),
-            Text(
-              "Nhấn ✏️ để bắt đầu cuộc trò chuyện mới",
-              style: TextStyle(color: Colors.black26, fontSize: 13),
+              'Chưa có cuộc trò chuyện bạn bè nào',
+              style: TextStyle(color: Colors.black45, fontSize: 15),
             ),
           ],
         ),
       );
     }
-    return RefreshIndicator(
-      onRefresh: () async => ctx.read<ConversationBloc>().add(
-        const ConversationRefreshRequested(),
-      ),
-      color: AppColors.primary,
-      backgroundColor: Colors.white,
-      child: ListView.builder(
-        itemCount: state.conversations.length,
-        itemBuilder: (_, i) {
-          final conv = state.conversations[i];
-          final uid = SupabaseService.currentUserId ?? '';
-          final other = conv.otherUser(uid);
-          return _ConvTile(
-            avatarUrl: other?.avatarUrl,
-            name: other?.displayName.isNotEmpty == true
-                ? other!.displayName
-                : (other?.username ?? 'Unknown'),
-            username: other?.username ?? '',
-            lastMessage: conv.lastMessage ?? 'Bắt đầu cuộc hội thoại',
-            time: _timeAgo(conv.lastMessageAt ?? conv.updatedAt),
-            userId: other?.id ?? '',
-            hasUnread: conv.hasUnread,
-            onTap: () => context
-                .push(Routes.messages, extra: conv)
-                .then((_) {
-                  if (ctx.mounted) {
-                    ctx.read<ConversationBloc>().add(
-                      const ConversationRefreshRequested(),
-                    );
-                  }
-                }),
-          );
-        },
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: Colors.black12,
+            size: 64,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Chưa có cuộc hội thoại nào',
+            style: TextStyle(color: Colors.black38, fontSize: 16),
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Nhấn ✏️ để bắt đầu cuộc trò chuyện mới",
+            style: TextStyle(color: Colors.black26, fontSize: 13),
+          ),
+        ],
       ),
     );
   }
@@ -456,92 +707,190 @@ class _ChatViewState extends State<_ChatView> {
 }
 
 class _ConvTile extends StatelessWidget {
-  final String? avatarUrl;
-  final String name, username, lastMessage, time;
-  final String userId;
-  final bool hasUnread;
+  final ConversationEntity conv;
+  final String currentUserId;
+  final String time;
   final VoidCallback onTap;
 
   const _ConvTile({
-    this.avatarUrl,
-    required this.name,
-    required this.username,
-    required this.lastMessage,
+    required this.conv,
+    required this.currentUserId,
     required this.time,
-    required this.userId,
-    required this.hasUnread,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-    color: Colors.white,
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: StreamBuilder<Map<String, dynamic>>(
-        stream: sl<PresenceService>().watchUserPresence(userId),
-        builder: (_, snapshot) {
-          final isOnline = snapshot.data?['is_online'] == true;
-          return Stack(
-            children: [
-              _Avatar(url: avatarUrl, name: name, size: 50),
+  Widget build(BuildContext context) {
+    final displayName = conv.getDisplayName(currentUserId);
+    final rawAvatar = conv.getAvatarUrl(currentUserId);
+    final avatarUrl = rawAvatar != null && rawAvatar.isNotEmpty
+        ? StorageImage.publicUrl(rawAvatar, bucket: 'avatars')
+        : null;
+    final other = conv.otherUser(currentUserId);
+    final isShop = conv.isShop;
+    final isShopOwner = conv.isShopOwner(currentUserId);
+    final isVerified = conv.isVerified(currentUserId);
+    final hasUnread = conv.hasUnread;
+
+    return Container(
+      color: Colors.white,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _Avatar(
+              url: avatarUrl,
+              name: displayName,
+              size: 50,
+              isShop: isShop && !isShopOwner,
+            ),
+            if (isShop && !isShopOwner)
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFF7A18), Color(0xFFFF2D55)],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.storefront_rounded,
+                    color: Colors.white,
+                    size: 11,
+                  ),
+                ),
+              )
+            else if (other != null)
               Positioned(
                 right: 2,
                 bottom: 2,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: isOnline ? Colors.green : Colors.grey.shade400,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
+                child: StreamBuilder<Map<String, dynamic>>(
+                  stream: sl<PresenceService>().watchUserPresence(other.id),
+                  builder: (_, snapshot) {
+                    final isOnline = snapshot.data?['is_online'] == true;
+                    return Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: isOnline ? Colors.green : Colors.grey.shade400,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: hasUnread ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            if (isShop && !isShopOwner) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF7A18), Color(0xFFFF2D55)],
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'SHOP',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
             ],
-          );
-        },
-      ),
-      title: Text(
-        name,
-        style: TextStyle(
-          color: Colors.black87,
-          fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w500,
-          fontSize: 15,
+            if (isShop && isShopOwner) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Khách mua',
+                  style: TextStyle(
+                    color: Color(0xFF2E7D32),
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+            if (isVerified) ...[
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.verified_rounded,
+                color: Color(0xFF20D5EC),
+                size: 15,
+              ),
+            ],
+          ],
         ),
-      ),
-      subtitle: Text(
-        lastMessage,
-        style: TextStyle(
-          color: hasUnread ? Colors.black54 : Colors.black38,
-          fontSize: 13,
-        ),
-        overflow: TextOverflow.ellipsis,
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            time,
-            style: const TextStyle(color: Colors.black38, fontSize: 11),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(
+            conv.lastMessage ?? (isShop ? 'Bắt đầu trò chuyện với Shop' : 'Bắt đầu cuộc hội thoại'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: hasUnread ? Colors.black87 : Colors.black45,
+              fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
+              fontSize: 13,
+            ),
           ),
-          if (hasUnread) ...[
-            const SizedBox(height: 4),
-            Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              time,
+              style: TextStyle(
+                color: hasUnread ? AppColors.primary : Colors.black38,
+                fontSize: 11,
+                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w400,
               ),
             ),
+            if (hasUnread) ...[
+              const SizedBox(height: 5),
+              Container(
+                width: 9,
+                height: 9,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
+        onTap: onTap,
       ),
-      onTap: onTap,
-    ),
-  );
+    );
+  }
 }
 
 class _NewChatSheet extends StatefulWidget {
@@ -664,59 +1013,73 @@ class _ActivityBubble extends StatelessWidget {
   final String label;
   final Color color;
   final int count;
+  final VoidCallback onTap;
 
   const _ActivityBubble({
     required this.icon,
     required this.label,
     required this.color,
     required this.count,
+    required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 6),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                shape: BoxShape.circle,
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    behavior: HitTestBehavior.opaque,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 22),
               ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            if (count > 0)
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
+              if (count > 0)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      count > 99 ? '99+' : '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.black38, fontSize: 9)),
-      ],
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.black54,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -725,23 +1088,66 @@ class _Avatar extends StatelessWidget {
   final String? url;
   final String name;
   final double size;
+  final bool isShop;
 
-  const _Avatar({this.url, required this.name, this.size = 48});
+  const _Avatar({
+    this.url,
+    required this.name,
+    this.size = 48,
+    this.isShop = false,
+  });
 
   @override
-  Widget build(BuildContext context) => CircleAvatar(
-    radius: size / 2,
-    backgroundColor: const Color(0xFFE8E8E8),
-    backgroundImage: url != null ? CachedNetworkImageProvider(url!) : null,
-    child: url == null
-        ? Text(
-            name.isNotEmpty ? name[0].toUpperCase() : '?',
-            style: TextStyle(
-              color: Colors.black54,
-              fontWeight: FontWeight.w700,
-              fontSize: size * 0.35,
-            ),
-          )
-        : null,
-  );
+  Widget build(BuildContext context) {
+    final effectiveUrl = url != null && url!.isNotEmpty
+        ? StorageImage.publicUrl(url!, bucket: 'avatars')
+        : null;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isShop ? const Color(0xFFFFF0EC) : const Color(0xFFE8E8E8),
+        border: Border.all(
+          color: isShop ? const Color(0xFFFFCCBC) : Colors.black12,
+          width: 0.8,
+        ),
+      ),
+      child: ClipOval(
+        child: effectiveUrl != null
+            ? CachedNetworkImage(
+                imageUrl: effectiveUrl,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => _buildFallback(),
+                placeholder: (_, __) => Container(
+                  color: isShop ? const Color(0xFFFFF0EC) : const Color(0xFFE8E8E8),
+                ),
+              )
+            : _buildFallback(),
+      ),
+    );
+  }
+
+  Widget _buildFallback() {
+    if (isShop) {
+      return const Center(
+        child: Icon(
+          Icons.storefront_rounded,
+          color: Color(0xFFFF5722),
+          size: 22,
+        ),
+      );
+    }
+    return Center(
+      child: Text(
+        name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?',
+        style: TextStyle(
+          color: Colors.black54,
+          fontWeight: FontWeight.w700,
+          fontSize: size * 0.38,
+        ),
+      ),
+    );
+  }
 }

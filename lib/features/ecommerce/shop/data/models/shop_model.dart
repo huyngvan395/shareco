@@ -13,6 +13,17 @@ class ShopModel {
   final int productCount;
   final int followerCount;
   final String status;
+  final String? contactPhone;
+  final String? contactEmail;
+  final String businessType;
+  final String? pickupProvince;
+  final String? pickupDistrict;
+  final String? pickupWard;
+  final String? pickupAddress;
+  final String defaultCarrier;
+  final bool isVerified;
+  final double settledRevenue;
+  final String? rejectionReason;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -29,6 +40,17 @@ class ShopModel {
     required this.productCount,
     required this.followerCount,
     required this.status,
+    this.contactPhone,
+    this.contactEmail,
+    this.businessType = 'individual',
+    this.pickupProvince,
+    this.pickupDistrict,
+    this.pickupWard,
+    this.pickupAddress,
+    this.defaultCarrier = 'SPX Express',
+    this.isVerified = false,
+    this.settledRevenue = 0,
+    this.rejectionReason,
     this.createdAt,
     this.updatedAt,
   });
@@ -46,7 +68,20 @@ class ShopModel {
       ratingCount: json['rating_count'] as int? ?? 0,
       productCount: json['product_count'] as int? ?? 0,
       followerCount: json['follower_count'] as int? ?? 0,
-      status: json['status'] as String? ?? 'active',
+      status: json['status'] as String? ?? 'pending',
+      contactPhone: json['contact_phone'] as String?,
+      contactEmail: json['contact_email'] as String?,
+      businessType: json['business_type'] as String? ?? 'individual',
+      pickupProvince: json['pickup_province'] as String?,
+      pickupDistrict: json['pickup_district'] as String?,
+      pickupWard: json['pickup_ward'] as String?,
+      pickupAddress: json['pickup_address'] as String?,
+      defaultCarrier: json['default_carrier'] as String? ?? 'SPX Express',
+      isVerified: (json['is_verified'] as bool?) ??
+          (json['has_blue_badge'] as bool?) ??
+          false,
+      settledRevenue: _asDouble(json['settled_revenue']),
+      rejectionReason: json['rejection_reason'] as String?,
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );
@@ -66,6 +101,17 @@ class ShopModel {
       productCount: productCount,
       followerCount: followerCount,
       status: status,
+      contactPhone: contactPhone,
+      contactEmail: contactEmail,
+      businessType: businessType,
+      pickupProvince: pickupProvince,
+      pickupDistrict: pickupDistrict,
+      pickupWard: pickupWard,
+      pickupAddress: pickupAddress,
+      defaultCarrier: defaultCarrier,
+      isVerified: isVerified,
+      settledRevenue: settledRevenue,
+      rejectionReason: rejectionReason,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

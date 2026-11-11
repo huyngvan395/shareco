@@ -2,6 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:shareco/core/layout/main_scaffold.dart';
+import 'package:shareco/core/services/notifications/push_notification_service.dart';
+import 'package:shareco/di/injector.dart';
+import '../constants/app_colors.dart';
 import '../constants/app_sizes.dart';
 import '../constants/app_strings.dart';
 
@@ -52,6 +55,24 @@ class AppNavbar extends StatelessWidget {
 
               if (isCenter) return _CreateButton(onTap: () => onTap(i), theme: theme);
 
+              if (i == 3 && sl.isRegistered<PushNotificationService>()) {
+                final push = sl<PushNotificationService>();
+                return Expanded(
+                  child: ListenableBuilder(
+                    listenable: push,
+                    builder: (_, _) => _NavItem(
+                      activeIcon: item.$1!,
+                      inactiveIcon: item.$2!,
+                      label: item.$3,
+                      isActive: isActive,
+                      onTap: () => onTap(i),
+                      theme: theme,
+                      badgeCount: push.unreadTotal,
+                    ),
+                  ),
+                );
+              }
+
               return Expanded(
                 child: _NavItem(
                   activeIcon: item.$1!,
@@ -59,7 +80,7 @@ class AppNavbar extends StatelessWidget {
                   label: item.$3,
                   isActive: isActive,
                   onTap: () => onTap(i),
-                  theme: theme
+                  theme: theme,
                 ),
               );
             }),
@@ -77,6 +98,7 @@ class _NavItem extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
   final TabTheme theme;
+  final int badgeCount;
 
   const _NavItem({
     required this.activeIcon,
@@ -84,7 +106,8 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.isActive,
     required this.onTap,
-    required this.theme
+    required this.theme,
+    this.badgeCount = 0,
   });
 
   @override
@@ -95,10 +118,41 @@ class _NavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            isActive ? activeIcon : inactiveIcon,
-            color: isActive ? theme.iconActive : theme.iconInactive,
-            size: AppSizes.iconLg,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(
+                isActive ? activeIcon : inactiveIcon,
+                color: isActive ? theme.iconActive : theme.iconInactive,
+                size: AppSizes.iconLg,
+              ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: -8,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4.5,
+                      vertical: 1.5,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 2),
           Text(
@@ -139,40 +193,40 @@ class _CreateButton extends StatelessWidget {
                   Positioned(
                     left: 0,
                     child: Container(
-                      width: 45,
+                      width: 44,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: Colors.cyanAccent,
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.secondary,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                   ),
 
-                  // 🔴 Layer phải (pink)
+                  // Layer phải (Brand Rose)
                   Positioned(
                     right: 0,
                     child: Container(
-                      width: 45,
+                      width: 44,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: Colors.pinkAccent,
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                   ),
 
-                  // ⚪ Layer chính (trắng + icon)
+                  // Layer chính
                   Container(
-                    width: 42,
+                    width: 41,
                     height: 30,
                     decoration: BoxDecoration(
                       color: theme.iconActive,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(9),
                     ),
                     child: Icon(
                       Icons.add_rounded,
                       color: theme.background,
-                      size: 24,
+                      size: 23,
                       weight: 900,
                     ),
                   ),

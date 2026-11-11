@@ -47,10 +47,11 @@ abstract class StorageImage {
     return normalized;
   }
 
-  /// Resolve Supabase Storage path → public URL
+  /// Resolve Supabase Storage path → public URL (tự động tách fragment #sc_meta nếu có)
   static String videoUrl(String path) {
-    if (path.startsWith('http')) return path;
-    return SupabaseService.publicUrl(Env.bucketVideoOriginals, path);
+    final cleanPath = path.split('#').first.trim();
+    if (cleanPath.startsWith('http')) return cleanPath;
+    return SupabaseService.publicUrl(Env.bucketVideoOriginals, cleanPath);
   }
 
   static String thumbnailUrl(String path) {
@@ -61,6 +62,16 @@ abstract class StorageImage {
   static String avatarUrl(String path) {
     if (path.startsWith('http')) return path;
     return SupabaseService.publicUrl(Env.bucketAvatars, path);
+  }
+
+  static String? avatar(String? path) {
+    if (path == null || path.trim().isEmpty) return null;
+    return avatarUrl(path.trim());
+  }
+
+  static String? videoThumbnail(String? path) {
+    if (path == null || path.trim().isEmpty) return null;
+    return thumbnailUrl(path.trim());
   }
 
   static String productMediaUrl(String path) {

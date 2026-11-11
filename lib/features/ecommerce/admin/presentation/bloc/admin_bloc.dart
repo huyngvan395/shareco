@@ -5,6 +5,7 @@ import 'package:shareco/features/ecommerce/product/domain/entities/product_media
 import 'package:shareco/features/ecommerce/product/domain/entities/product_variant.dart';
 import 'package:shareco/features/ecommerce/order/domain/entities/ecommerce_order.dart';
 import 'package:shareco/features/ecommerce/order/domain/entities/order_item.dart';
+import 'package:shareco/features/ecommerce/order/domain/entities/order_tracking_event.dart';
 
 import 'admin_event.dart';
 import 'admin_state.dart';
@@ -17,6 +18,56 @@ class AdminFallbackStore {
 
   static final List<Map<String, dynamic>> shops = [
     {
+      'id': 'shop-pending-01',
+      'shop_name': 'Gia Dụng Thông Minh TechHouse',
+      'shop_slug': 'gia-dung-thong-minh-techhouse',
+      'description': 'Chuyên cung cấp các thiết bị gia dụng thông minh, phụ kiện đời sống tiện ích chính hãng.',
+      'logo_path': 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=200&h=200&fit=crop',
+      'cover_path': 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&h=400&fit=crop',
+      'rating_avg': 5.0,
+      'rating_count': 0,
+      'follower_count': 0,
+      'is_verified': false,
+      'status': 'pending',
+      'created_at': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
+      'pickup_address': 'Số 86 Đường Cầu Giấy',
+      'pickup_ward': 'Phường Quan Hoa',
+      'pickup_district': 'Quận Cầu Giấy',
+      'pickup_province': 'Hà Nội',
+      'profiles': {
+        'id': 'user-owner-01',
+        'display_name': 'Lê Hoàng Long',
+        'username': 'hoanglong_tech',
+        'avatar_url': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop',
+        'phone_number': '0988 123 456',
+      },
+    },
+    {
+      'id': 'shop-pending-02',
+      'shop_name': 'Genz Daily Style Boutique',
+      'shop_slug': 'genz-daily-style-boutique',
+      'description': 'Thương hiệu thời trang thiết kế trẻ trung, bắt trend dành cho giới trẻ và học sinh sinh viên.',
+      'logo_path': 'https://images.unsplash.com/photo-1445205170230-053b83016050?w=200&h=200&fit=crop',
+      'cover_path': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=400&fit=crop',
+      'rating_avg': 5.0,
+      'rating_count': 0,
+      'follower_count': 0,
+      'is_verified': false,
+      'status': 'pending',
+      'created_at': DateTime.now().subtract(const Duration(hours: 8)).toIso8601String(),
+      'pickup_address': 'Tầng 3, 45 Nguyễn Huệ',
+      'pickup_ward': 'Phường Bến Nghé',
+      'pickup_district': 'Quận 1',
+      'pickup_province': 'TP. Hồ Chí Minh',
+      'profiles': {
+        'id': 'user-owner-02',
+        'display_name': 'Trần Mai Anh',
+        'username': 'maianh_style',
+        'avatar_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop',
+        'phone_number': '0903 789 654',
+      },
+    },
+    {
       'id': 'shop-loreal-01',
       'shop_name': "L'Oreal Paris Official",
       'shop_slug': 'loreal-paris-official',
@@ -28,6 +79,18 @@ class AdminFallbackStore {
       'follower_count': 85400,
       'is_verified': true,
       'status': 'active',
+      'created_at': '2024-01-10T10:00:00Z',
+      'pickup_address': 'Tòa nhà Bitexco, Số 2 Hải Triều',
+      'pickup_ward': 'Phường Bến Nghé',
+      'pickup_district': 'Quận 1',
+      'pickup_province': 'TP. Hồ Chí Minh',
+      'profiles': {
+        'id': 'user-loreal-admin',
+        'display_name': 'Đại Diện L\'Oreal VN',
+        'username': 'loreal_vietnam',
+        'avatar_url': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=150&h=150&fit=crop',
+        'phone_number': '1900 1234',
+      },
     },
     {
       'id': 'shop-cocoon-02',
@@ -41,6 +104,18 @@ class AdminFallbackStore {
       'follower_count': 62300,
       'is_verified': true,
       'status': 'active',
+      'created_at': '2024-02-12T14:30:00Z',
+      'pickup_address': 'Khu Công Nghiệp Tân Bình',
+      'pickup_ward': 'Phường Tây Thạnh',
+      'pickup_district': 'Quận Tân Phú',
+      'pickup_province': 'TP. Hồ Chí Minh',
+      'profiles': {
+        'id': 'user-cocoon-admin',
+        'display_name': 'Cocoon Nature Care',
+        'username': 'cocoon_vietnam',
+        'avatar_url': 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=150&h=150&fit=crop',
+        'phone_number': '028 3812 3456',
+      },
     },
     {
       'id': 'shop-cerave-03',
@@ -54,6 +129,11 @@ class AdminFallbackStore {
       'follower_count': 49100,
       'is_verified': true,
       'status': 'active',
+      'created_at': '2024-03-01T09:15:00Z',
+      'pickup_address': 'Kho Logistics Long Hậu',
+      'pickup_ward': 'Xã Long Hậu',
+      'pickup_district': 'Huyện Cần Giuộc',
+      'pickup_province': 'Long An',
     },
     {
       'id': 'shop-anessa-04',
@@ -67,19 +147,37 @@ class AdminFallbackStore {
       'follower_count': 38900,
       'is_verified': true,
       'status': 'active',
+      'created_at': '2024-03-10T11:00:00Z',
+      'pickup_address': 'Shiseido Logistics Center',
+      'pickup_ward': 'Phường Linh Trung',
+      'pickup_district': 'TP. Thủ Đức',
+      'pickup_province': 'TP. Hồ Chí Minh',
     },
     {
-      'id': 'shop-laroche-05',
-      'shop_name': 'La Roche-Posay Chính Hãng',
-      'shop_slug': 'la-roche-posay',
-      'description': 'Dược mỹ phẩm Pháp chuyên biệt dành cho làn da nhạy cảm & da dầu mụn.',
+      'id': 'shop-rejected-05',
+      'shop_name': 'Hàng Xách Tay Giá Sốc 99',
+      'shop_slug': 'hang-xach-tay-gia-soc-99',
+      'description': 'Cung cấp mỹ phẩm, nước hoa xách tay không giấy tờ giá rẻ nhất thị trường.',
       'logo_path': 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=200&h=200&fit=crop',
       'cover_path': 'https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?w=800&h=400&fit=crop',
-      'rating_avg': 4.91,
-      'rating_count': 890,
-      'follower_count': 71200,
-      'is_verified': true,
-      'status': 'active',
+      'rating_avg': 3.0,
+      'rating_count': 2,
+      'follower_count': 15,
+      'is_verified': false,
+      'status': 'rejected',
+      'rejection_reason': 'Hồ sơ không có hóa đơn chứng từ chứng minh xuất xứ nguồn gốc hàng hóa chính ngạch theo quy định kiểm duyệt của ShareCo.',
+      'created_at': '2026-11-01T15:00:00Z',
+      'pickup_address': 'Ngõ 12 Đường Giải Phóng',
+      'pickup_ward': 'Phường Phương Mai',
+      'pickup_district': 'Quận Đống Đa',
+      'pickup_province': 'Hà Nội',
+      'profiles': {
+        'id': 'user-rejected-01',
+        'display_name': 'Nguyễn Văn Nam',
+        'username': 'nam_xachtay',
+        'avatar_url': null,
+        'phone_number': '0977 444 333',
+      },
     },
   ];
 
@@ -273,6 +371,10 @@ class AdminFallbackStore {
       shippingAmount: 15000,
       totalAmount: 245000,
       currency: 'VND',
+      shippingCarrier: 'SPX Express',
+      trackingCode: 'SPXVN08239088',
+      pickupLocation: 'Bưu cục Tây Thạnh, Tân Phú, TP.HCM',
+      currentLocation: 'Hub trung chuyển Tân Bình, TP.HCM',
       addressSnapshot: const {
         'recipient_name': 'Trần Hoàng Bảo Ngọc',
         'phone': '0987 654 321',
@@ -282,6 +384,8 @@ class AdminFallbackStore {
         'province': 'TP. Hồ Chí Minh',
       },
       placedAt: DateTime.now().subtract(const Duration(hours: 9)),
+      confirmedAt: DateTime.now().subtract(const Duration(hours: 8)),
+      shippedAt: DateTime.now().subtract(const Duration(hours: 5)),
       items: const [
         OrderItem(
           id: 'item-02',
@@ -294,6 +398,39 @@ class AdminFallbackStore {
           unitPrice: 115000,
           qty: 2,
           lineTotal: 230000,
+        ),
+      ],
+      trackingEvents: [
+        OrderTrackingEvent(
+          id: 'trk-03',
+          orderId: 'ord-demo-1002',
+          status: 'in_transit',
+          title: 'Đang trung chuyển qua Hub Tân Bình',
+          location: 'Hub trung chuyển Tân Bình, TP.HCM',
+          description: 'Kiện hàng đang được phân loại và chuyển tiếp về bưu cục phát Quận 1.',
+          carrierName: 'SPX Express',
+          actorRole: 'carrier',
+          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        ),
+        OrderTrackingEvent(
+          id: 'trk-02',
+          orderId: 'ord-demo-1002',
+          status: 'shipping',
+          title: 'Đã bàn giao cho SPX Express',
+          location: 'Bưu cục Tây Thạnh, Tân Phú, TP.HCM',
+          description: 'Shipper SPX đã lấy hàng từ kho của người bán.',
+          carrierName: 'SPX Express',
+          actorRole: 'carrier',
+          createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+        ),
+        OrderTrackingEvent(
+          id: 'trk-01',
+          orderId: 'ord-demo-1002',
+          status: 'packed',
+          title: 'Người bán đã đóng gói hàng',
+          description: 'Kiện hàng đã sẵn sàng giao cho đơn vị vận chuyển.',
+          actorRole: 'seller',
+          createdAt: DateTime.now().subtract(const Duration(hours: 8)),
         ),
       ],
     ),
@@ -309,6 +446,10 @@ class AdminFallbackStore {
       shippingAmount: 0,
       totalAmount: 490000,
       currency: 'VND',
+      shippingCarrier: 'Giao Hàng Nhanh (GHN)',
+      trackingCode: 'GHNVN9832104',
+      pickupLocation: 'Shiseido Logistics Center, Thủ Đức',
+      currentLocation: 'Khu đô thị Đại học Quốc Gia, TP. Thủ Đức',
       addressSnapshot: const {
         'recipient_name': 'Lê Quang Chung',
         'phone': '0912 888 999',
@@ -318,6 +459,9 @@ class AdminFallbackStore {
         'province': 'TP. Hồ Chí Minh',
       },
       placedAt: DateTime.now().subtract(const Duration(days: 1, hours: 4)),
+      confirmedAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
+      shippedAt: DateTime.now().subtract(const Duration(hours: 18)),
+      deliveredAt: DateTime.now().subtract(const Duration(hours: 2)),
       items: const [
         OrderItem(
           id: 'item-03',
@@ -330,6 +474,41 @@ class AdminFallbackStore {
           unitPrice: 525000,
           qty: 1,
           lineTotal: 525000,
+        ),
+      ],
+      trackingEvents: [
+        OrderTrackingEvent(
+          id: 'trk-06',
+          orderId: 'ord-demo-1003',
+          status: 'completed',
+          title: 'Giao hàng thành công',
+          location: 'Khu đô thị Đại học Quốc Gia, TP. Thủ Đức',
+          description: 'Người nhận đã nhận hàng và hoàn tất thanh toán.',
+          carrierName: 'Giao Hàng Nhanh (GHN)',
+          actorRole: 'carrier',
+          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        ),
+        OrderTrackingEvent(
+          id: 'trk-05',
+          orderId: 'ord-demo-1003',
+          status: 'out_for_delivery',
+          title: 'Shipper đang giao hàng',
+          location: 'Bưu cục Linh Trung, TP. Thủ Đức',
+          description: 'Shipper Nguyễn Tuấn đang liên hệ giao hàng.',
+          carrierName: 'Giao Hàng Nhanh (GHN)',
+          actorRole: 'carrier',
+          createdAt: DateTime.now().subtract(const Duration(hours: 4)),
+        ),
+        OrderTrackingEvent(
+          id: 'trk-04',
+          orderId: 'ord-demo-1003',
+          status: 'shipping',
+          title: 'Đã bàn giao cho GHN',
+          location: 'Shiseido Logistics Center, Thủ Đức',
+          description: 'Kiện hàng đã rời kho người bán.',
+          carrierName: 'Giao Hàng Nhanh (GHN)',
+          actorRole: 'carrier',
+          createdAt: DateTime.now().subtract(const Duration(hours: 18)),
         ),
       ],
     ),
@@ -488,6 +667,129 @@ class AdminFallbackStore {
       'video_product_tags': [],
     },
   ];
+
+  static final List<Map<String, dynamic>> users = [
+    {
+      'id': 'user-linh-01',
+      'username': 'linhbeauty.vn',
+      'display_name': 'Khánh Linh Beauty',
+      'avatar_url': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop',
+      'bio': 'Chuyên gia review skincare & mỹ phẩm thuần chay 🌿',
+      'phone_number': '0912 345 678',
+      'is_verified': true,
+      'is_banned': false,
+      'ban_reason': null,
+      'banned_at': null,
+      'banned_until': null,
+      'can_live': true,
+      'can_comment': true,
+      'can_post_video': true,
+      'strike_count': 0,
+      'followers_count': 128500,
+      'video_count': 42,
+      'created_at': '2024-01-15T08:00:00Z',
+    },
+    {
+      'id': 'user-chung-03',
+      'username': 'quangchung.official',
+      'display_name': 'Quang Chung Creator',
+      'avatar_url': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=150&fit=crop',
+      'bio': 'Kênh trải nghiệm du lịch, lifestyle & đồ gia dụng',
+      'phone_number': '0988 777 666',
+      'is_verified': true,
+      'is_banned': false,
+      'ban_reason': null,
+      'banned_at': null,
+      'banned_until': null,
+      'can_live': true,
+      'can_comment': true,
+      'can_post_video': true,
+      'strike_count': 0,
+      'followers_count': 84200,
+      'video_count': 35,
+      'created_at': '2024-02-20T10:30:00Z',
+    },
+    {
+      'id': 'user-owner-01',
+      'username': 'hoanglong_tech',
+      'display_name': 'Lê Hoàng Long',
+      'avatar_url': 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&h=150&fit=crop',
+      'bio': 'Chủ shop Gia Dụng Thông Minh TechHouse - Đang chờ duyệt gian hàng',
+      'phone_number': '0988 123 456',
+      'is_verified': false,
+      'is_banned': false,
+      'ban_reason': null,
+      'banned_at': null,
+      'banned_until': null,
+      'can_live': true,
+      'can_comment': true,
+      'can_post_video': true,
+      'strike_count': 0,
+      'followers_count': 3400,
+      'video_count': 8,
+      'created_at': '2026-10-12T14:20:00Z',
+    },
+    {
+      'id': 'user-minh-02',
+      'username': 'minhskincare',
+      'display_name': 'Minh Anh Review',
+      'avatar_url': 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&h=150&fit=crop',
+      'bio': 'Đam mê làm đẹp và trải nghiệm đồ tốt giá rẻ',
+      'phone_number': '0933 555 444',
+      'is_verified': false,
+      'is_banned': false,
+      'ban_reason': 'Tạm khóa quyền Livestream do phát nhạc vi phạm bản quyền quốc tế trong phiên live',
+      'banned_at': null,
+      'banned_until': null,
+      'can_live': false,
+      'can_comment': true,
+      'can_post_video': true,
+      'strike_count': 1,
+      'followers_count': 15300,
+      'video_count': 18,
+      'created_at': '2024-04-05T09:00:00Z',
+    },
+    {
+      'id': 'user-buyer-05',
+      'username': 'phuongthao_98',
+      'display_name': 'Phương Thảo',
+      'avatar_url': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop',
+      'bio': 'Tín đồ mua sắm ShareCo Mall 🛍️',
+      'phone_number': '0908 999 111',
+      'is_verified': false,
+      'is_banned': false,
+      'ban_reason': null,
+      'banned_at': null,
+      'banned_until': null,
+      'can_live': true,
+      'can_comment': true,
+      'can_post_video': true,
+      'strike_count': 0,
+      'followers_count': 560,
+      'video_count': 4,
+      'created_at': '2024-05-18T16:45:00Z',
+    },
+    {
+      'id': 'user-spam-04',
+      'username': 'shop_gia_re_99',
+      'display_name': 'Tài Khoản Gian Lận Spam',
+      'avatar_url': null,
+      'bio': 'Bán hàng giả nhái, phát tán liên kết độc hại',
+      'phone_number': '0977 444 333',
+      'is_verified': false,
+      'is_banned': true,
+      'ban_reason': 'Phát tán hàng giả, đăng nội dung lừa đảo vi phạm nghiêm trọng Tiêu chuẩn Cộng đồng',
+      'banned_at': '2026-11-05T10:00:00Z',
+      'banned_until': '2027-11-05T10:00:00Z',
+      'can_live': false,
+      'can_comment': false,
+      'can_post_video': false,
+      'strike_count': 3,
+      'followers_count': 420,
+      'video_count': 3,
+      'created_at': '2026-11-01T15:00:00Z',
+    },
+  ];
 }
 
 class AdminBloc extends Bloc<AdminEvent, AdminState> {
@@ -497,6 +799,14 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     on<AdminUpdateShop>(_onUpdateShop);
     on<AdminToggleShopVerified>(_onToggleShopVerified);
     on<AdminToggleShopStatus>(_onToggleShopStatus);
+    on<AdminApproveShop>(_onApproveShop);
+    on<AdminRejectShop>(_onRejectShop);
+    on<AdminFetchUsers>(_onFetchUsers);
+    on<AdminToggleUserVerified>(_onToggleUserVerified);
+    on<AdminBanUser>(_onBanUser);
+    on<AdminToggleUserCanLive>(_onToggleUserCanLive);
+    on<AdminToggleUserCanComment>(_onToggleUserCanComment);
+    on<AdminIssueUserWarning>(_onIssueUserWarning);
     on<AdminFetchProducts>(_onFetchProducts);
     on<AdminCreateProduct>(_onCreateProduct);
     on<AdminUpdateProduct>(_onUpdateProduct);
@@ -504,6 +814,10 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     on<AdminToggleProductStatus>(_onToggleProductStatus);
     on<AdminFetchOrders>(_onFetchOrders);
     on<AdminUpdateOrderStatus>(_onUpdateOrderStatus);
+    on<AdminConfirmAndPackOrder>(_onConfirmAndPackOrder);
+    on<AdminHandoverOrderToCarrier>(_onHandoverOrderToCarrier);
+    on<AdminAdvanceOrderLocation>(_onAdvanceOrderLocation);
+    on<AdminSellerCancelOrder>(_onSellerCancelOrder);
     on<AdminFetchVideos>(_onFetchVideos);
     on<AdminUpdateVideoStatus>(_onUpdateVideoStatus);
     on<AdminApproveAllPendingVideos>(_onApproveAllPendingVideos);
@@ -512,10 +826,18 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   Future<void> _onFetchShops(AdminFetchShops event, Emitter<AdminState> emit) async {
     emit(state.copyWith(status: AdminStatus.loading));
     try {
-      final response = await Supabase.instance.client
-          .from('shops')
-          .select('*')
-          .order('shop_name', ascending: true);
+      dynamic response;
+      try {
+        response = await Supabase.instance.client
+            .from('shops')
+            .select('*, profiles:owner_id(id, username, display_name, avatar_url)')
+            .order('created_at', ascending: false);
+      } catch (_) {
+        response = await Supabase.instance.client
+            .from('shops')
+            .select('*')
+            .order('shop_name', ascending: true);
+      }
 
       AdminFallbackStore.isOfflineMode = false;
       emit(state.copyWith(
@@ -639,6 +961,289 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       }
     }
     add(AdminFetchShops());
+  }
+
+  Future<void> _onApproveShop(
+    AdminApproveShop event,
+    Emitter<AdminState> emit,
+  ) async {
+    try {
+      await Supabase.instance.client.from('shops').update({
+        'status': 'active',
+        'rejection_reason': null,
+        'approved_at': DateTime.now().toIso8601String(),
+      }).eq('id', event.shopId);
+    } catch (_) {
+      final index = AdminFallbackStore.shops.indexWhere((s) => s['id'] == event.shopId);
+      if (index != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.shops[index]);
+        updated['status'] = 'active';
+        updated['rejection_reason'] = null;
+        updated['approved_at'] = DateTime.now().toIso8601String();
+        AdminFallbackStore.shops[index] = updated;
+      }
+    }
+    add(AdminFetchShops());
+  }
+
+  Future<void> _onRejectShop(
+    AdminRejectShop event,
+    Emitter<AdminState> emit,
+  ) async {
+    try {
+      await Supabase.instance.client.from('shops').update({
+        'status': 'rejected',
+        'rejection_reason': event.reason,
+      }).eq('id', event.shopId);
+    } catch (_) {
+      final index = AdminFallbackStore.shops.indexWhere((s) => s['id'] == event.shopId);
+      if (index != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.shops[index]);
+        updated['status'] = 'rejected';
+        updated['rejection_reason'] = event.reason;
+        AdminFallbackStore.shops[index] = updated;
+      }
+    }
+    add(AdminFetchShops());
+  }
+
+  Future<void> _onFetchUsers(
+    AdminFetchUsers event,
+    Emitter<AdminState> emit,
+  ) async {
+    emit(state.copyWith(status: AdminStatus.loading));
+    try {
+      dynamic response;
+      try {
+        response = await Supabase.instance.client
+            .from('profiles')
+            .select('*, videos:videos!author_id(id)')
+            .order('created_at', ascending: false);
+      } catch (err) {
+        response = await Supabase.instance.client
+            .from('profiles')
+            .select('*')
+            .order('created_at', ascending: false);
+      }
+
+      final List<Map<String, dynamic>> realUsers = (response as List).map((u) {
+        final map = Map<String, dynamic>.from(u as Map);
+        final vids = map['videos'] as List?;
+        if (vids != null) {
+          map['video_count'] = vids.length;
+        } else {
+          map['video_count'] = (map['video_count'] as num?)?.toInt() ?? 0;
+        }
+        map['is_verified'] = map['is_verified'] == true;
+        map['is_banned'] = map['is_banned'] == true;
+        map['can_live'] = map['can_live'] ?? true;
+        map['can_comment'] = map['can_comment'] ?? true;
+        map['can_post_video'] = map['can_post_video'] ?? true;
+        map['strike_count'] = (map['strike_count'] as num?)?.toInt() ?? 0;
+        map['follower_count'] = (map['follower_count'] as num?)?.toInt() ?? 0;
+        map['following_count'] = (map['following_count'] as num?)?.toInt() ?? 0;
+        return map;
+      }).toList();
+
+      AdminFallbackStore.isOfflineMode = false;
+      emit(state.copyWith(
+        status: AdminStatus.success,
+        users: realUsers,
+      ));
+    } catch (_) {
+      AdminFallbackStore.isOfflineMode = true;
+      emit(state.copyWith(
+        status: AdminStatus.success,
+        users: List<Map<String, dynamic>>.from(AdminFallbackStore.users),
+      ));
+    }
+  }
+
+  Future<void> _onToggleUserVerified(
+    AdminToggleUserVerified event,
+    Emitter<AdminState> emit,
+  ) async {
+    // 1. Cập nhật lạc quan (optimistic) trên state hiện tại
+    final updatedUsers = state.users.map((u) {
+      if (u['id'] == event.userId) {
+        final m = Map<String, dynamic>.from(u);
+        m['is_verified'] = event.isVerified;
+        return m;
+      }
+      return u;
+    }).toList();
+    emit(state.copyWith(users: updatedUsers));
+
+    // 2. Gửi lệnh cập nhật lên Supabase database
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'is_verified': event.isVerified})
+          .eq('id', event.userId);
+    } catch (_) {
+      final idx = AdminFallbackStore.users.indexWhere((u) => u['id'] == event.userId);
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.users[idx]);
+        updated['is_verified'] = event.isVerified;
+        AdminFallbackStore.users[idx] = updated;
+      }
+    }
+  }
+
+  Future<void> _onBanUser(
+    AdminBanUser event,
+    Emitter<AdminState> emit,
+  ) async {
+    final Map<String, dynamic> updateData = {
+      'is_banned': event.isBanned,
+      'ban_reason': event.isBanned ? event.reason : null,
+      'banned_at': event.isBanned ? DateTime.now().toIso8601String() : null,
+      'banned_until': event.isBanned && event.durationDays != null
+          ? DateTime.now().add(Duration(days: event.durationDays!)).toIso8601String()
+          : null,
+    };
+    if (event.isBanned) {
+      updateData['can_live'] = false;
+    }
+
+    // 1. Cập nhật lạc quan (optimistic) trên state
+    final updatedUsers = state.users.map((u) {
+      if (u['id'] == event.userId) {
+        final m = Map<String, dynamic>.from(u);
+        m.addAll(updateData);
+        return m;
+      }
+      return u;
+    }).toList();
+    emit(state.copyWith(users: updatedUsers));
+
+    // 2. Gửi lệnh cập nhật lên Supabase database
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update(updateData)
+          .eq('id', event.userId);
+    } catch (_) {
+      final idx = AdminFallbackStore.users.indexWhere((u) => u['id'] == event.userId);
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.users[idx]);
+        updated.addAll(updateData);
+        AdminFallbackStore.users[idx] = updated;
+      }
+    }
+  }
+
+  Future<void> _onToggleUserCanLive(
+    AdminToggleUserCanLive event,
+    Emitter<AdminState> emit,
+  ) async {
+    final Map<String, dynamic> updateData = {
+      'can_live': event.canLive,
+      if (!event.canLive && event.reason != null) 'ban_reason': event.reason,
+    };
+
+    // 1. Cập nhật lạc quan (optimistic) trên state
+    final updatedUsers = state.users.map((u) {
+      if (u['id'] == event.userId) {
+        final m = Map<String, dynamic>.from(u);
+        m.addAll(updateData);
+        return m;
+      }
+      return u;
+    }).toList();
+    emit(state.copyWith(users: updatedUsers));
+
+    // 2. Gửi lệnh cập nhật lên Supabase database
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update(updateData)
+          .eq('id', event.userId);
+    } catch (_) {
+      final idx = AdminFallbackStore.users.indexWhere((u) => u['id'] == event.userId);
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.users[idx]);
+        updated.addAll(updateData);
+        AdminFallbackStore.users[idx] = updated;
+      }
+    }
+  }
+
+  Future<void> _onToggleUserCanComment(
+    AdminToggleUserCanComment event,
+    Emitter<AdminState> emit,
+  ) async {
+    final Map<String, dynamic> updateData = {'can_comment': event.canComment};
+
+    // 1. Cập nhật lạc quan (optimistic) trên state
+    final updatedUsers = state.users.map((u) {
+      if (u['id'] == event.userId) {
+        final m = Map<String, dynamic>.from(u);
+        m.addAll(updateData);
+        return m;
+      }
+      return u;
+    }).toList();
+    emit(state.copyWith(users: updatedUsers));
+
+    // 2. Gửi lệnh cập nhật lên Supabase database
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update(updateData)
+          .eq('id', event.userId);
+    } catch (_) {
+      final idx = AdminFallbackStore.users.indexWhere((u) => u['id'] == event.userId);
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.users[idx]);
+        updated.addAll(updateData);
+        AdminFallbackStore.users[idx] = updated;
+      }
+    }
+  }
+
+  Future<void> _onIssueUserWarning(
+    AdminIssueUserWarning event,
+    Emitter<AdminState> emit,
+  ) async {
+    int currentStrikes = 0;
+    final existing = state.users.firstWhere((u) => u['id'] == event.userId, orElse: () => {});
+    if (existing.isNotEmpty) {
+      currentStrikes = (existing['strike_count'] as num?)?.toInt() ?? 0;
+    }
+    final newStrikes = currentStrikes + 1;
+    final shouldBan = newStrikes >= 3;
+    final reason = 'Gậy cảnh cáo vi phạm lần thứ $newStrikes: ${event.reason}${shouldBan ? ' (Tự động khóa tài khoản do tích lũy đủ 3 gậy vi phạm)' : ''}';
+
+    final Map<String, dynamic> updateData = {
+      'strike_count': newStrikes,
+      if (shouldBan) 'is_banned': true,
+      if (shouldBan) 'can_live': false,
+      'ban_reason': reason,
+    };
+
+    // 1. Cập nhật lạc quan (optimistic) trên state
+    final updatedUsers = state.users.map((u) {
+      if (u['id'] == event.userId) {
+        final m = Map<String, dynamic>.from(u);
+        m.addAll(updateData);
+        return m;
+      }
+      return u;
+    }).toList();
+    emit(state.copyWith(users: updatedUsers));
+
+    // 2. Gửi lệnh cập nhật lên Supabase database
+    try {
+      await Supabase.instance.client.from('profiles').update(updateData).eq('id', event.userId);
+    } catch (_) {
+      final idx = AdminFallbackStore.users.indexWhere((u) => u['id'] == event.userId);
+      if (idx != -1) {
+        final updated = Map<String, dynamic>.from(AdminFallbackStore.users[idx]);
+        updated.addAll(updateData);
+        AdminFallbackStore.users[idx] = updated;
+      }
+    }
   }
 
   Future<void> _onFetchProducts(AdminFetchProducts event, Emitter<AdminState> emit) async {
@@ -933,56 +1538,110 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   Future<void> _onFetchOrders(AdminFetchOrders event, Emitter<AdminState> emit) async {
     emit(state.copyWith(status: AdminStatus.loading));
     try {
-      dynamic query = Supabase.instance.client.from('orders').select('''
-        *,
-        order_items (
+      dynamic response;
+      try {
+        dynamic query = Supabase.instance.client.from('orders').select('''
           *,
-          products (title, cover_path)
-        )
-      ''');
+          order_items (
+            *,
+            products (title, cover_path)
+          ),
+          order_tracking_events (*)
+        ''');
 
-      if (event.shopId != null) {
-        query = query.eq('shop_id', event.shopId!);
+        if (event.shopId != null) {
+          query = query.eq('shop_id', event.shopId!);
+        }
+
+        response = await query.order('placed_at', ascending: false);
+      } catch (_) {
+        dynamic query = Supabase.instance.client.from('orders').select('''
+          *,
+          order_items (
+            *,
+            products (title, cover_path)
+          )
+        ''');
+
+        if (event.shopId != null) {
+          query = query.eq('shop_id', event.shopId!);
+        }
+
+        response = await query.order('placed_at', ascending: false);
       }
-
-      final response = await query.order('placed_at', ascending: false);
 
       final orderList = List<Map<String, dynamic>>.from(response).map((o) {
         final rawItems = List<Map<String, dynamic>>.from(o['order_items'] ?? []);
         final items = rawItems.map((item) {
           final productMap = item['products'] as Map<String, dynamic>?;
           return OrderItem(
-            id: item['id'],
-            orderId: item['order_id'],
-            productId: item['product_id'],
-            variantId: item['variant_id'],
-            shopId: item['shop_id'] ?? o['shop_id'] ?? '',
+            id: item['id']?.toString() ?? '',
+            orderId: item['order_id']?.toString() ?? '',
+            productId: item['product_id']?.toString() ?? '',
+            variantId: item['variant_id']?.toString(),
+            shopId: item['shop_id']?.toString() ?? o['shop_id']?.toString() ?? '',
             title: productMap?['title'] ?? item['title'] ?? 'Sản phẩm',
-            variantName: item['variant_name'],
+            variantName: item['variant_name']?.toString(),
             imagePath: productMap?['cover_path'] ?? item['image_path'],
-            unitPrice: (item['unit_price'] as num).toDouble(),
-            qty: item['qty'] ?? 1,
-            lineTotal: (item['line_total'] as num).toDouble(),
+            unitPrice: (item['unit_price'] as num?)?.toDouble() ?? 0.0,
+            qty: (item['qty'] as num?)?.toInt() ?? 1,
+            lineTotal: (item['line_total'] as num?)?.toDouble() ?? 0.0,
           );
         }).toList();
 
+        final rawTracking = List<Map<String, dynamic>>.from(o['order_tracking_events'] ?? []);
+        final trackingEvents = rawTracking.map((t) {
+          return OrderTrackingEvent(
+            id: t['id']?.toString() ?? '',
+            orderId: t['order_id']?.toString() ?? '',
+            status: t['status']?.toString() ?? 'pending',
+            title: t['title']?.toString() ?? 'Cập nhật vận đơn',
+            description: t['description']?.toString(),
+            location: t['location']?.toString(),
+            carrierName: t['carrier_name']?.toString(),
+            lat: (t['lat'] as num?)?.toDouble(),
+            lng: (t['lng'] as num?)?.toDouble(),
+            actorRole: t['actor_role']?.toString() ?? 'carrier',
+            createdAt: t['created_at'] != null ? DateTime.tryParse(t['created_at'].toString()) : null,
+          );
+        }).toList();
+
+        // Sắp xếp các mốc thời gian mới nhất lên trên
+        trackingEvents.sort((a, b) {
+          final timeA = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final timeB = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return timeB.compareTo(timeA);
+        });
+
         return EcommerceOrder(
-          id: o['id'],
-          buyerId: o['buyer_id'] ?? '',
-          shopId: o['shop_id'] ?? '',
-          shopName: o['shop_name'],
-          orderCode: o['order_code'] ?? 'ORD',
-          status: o['status'] ?? 'pending',
+          id: o['id']?.toString() ?? '',
+          buyerId: o['buyer_id']?.toString() ?? '',
+          shopId: o['shop_id']?.toString() ?? '',
+          shopName: o['shop_name']?.toString(),
+          shopOwnerId: o['shop_owner_id']?.toString(),
+          orderCode: o['order_code']?.toString() ?? 'ORD',
+          status: o['status']?.toString() ?? 'pending',
           subtotalAmount: (o['subtotal_amount'] as num?)?.toDouble() ?? 0.0,
           discountAmount: (o['discount_amount'] as num?)?.toDouble() ?? 0.0,
           shippingAmount: (o['shipping_amount'] as num?)?.toDouble() ?? 0.0,
           totalAmount: (o['total_amount'] as num?)?.toDouble() ?? 0.0,
-          currency: o['currency'] ?? 'VND',
+          currency: o['currency']?.toString() ?? 'VND',
           addressSnapshot: Map<String, dynamic>.from(o['address_snapshot'] ?? {}),
-          note: o['note'],
-          placedAt: o['placed_at'] != null ? DateTime.parse(o['placed_at']) : null,
-          updatedAt: o['updated_at'] != null ? DateTime.parse(o['updated_at']) : null,
+          note: o['note']?.toString(),
+          placedAt: o['placed_at'] != null ? DateTime.tryParse(o['placed_at'].toString()) : null,
+          updatedAt: o['updated_at'] != null ? DateTime.tryParse(o['updated_at'].toString()) : null,
+          shippingCarrier: o['shipping_carrier']?.toString(),
+          shippingService: o['shipping_service']?.toString(),
+          trackingCode: o['tracking_code']?.toString(),
+          currentLocation: o['current_location']?.toString(),
+          pickupLocation: o['pickup_location']?.toString(),
+          estimatedDeliveryAt: o['estimated_delivery_at'] != null ? DateTime.tryParse(o['estimated_delivery_at'].toString()) : null,
+          confirmedAt: o['confirmed_at'] != null ? DateTime.tryParse(o['confirmed_at'].toString()) : null,
+          shippedAt: o['shipped_at'] != null ? DateTime.tryParse(o['shipped_at'].toString()) : null,
+          deliveredAt: o['delivered_at'] != null ? DateTime.tryParse(o['delivered_at'].toString()) : null,
+          cancelReason: o['cancel_reason']?.toString(),
           items: items,
+          trackingEvents: trackingEvents,
         );
       }).toList();
 
@@ -998,11 +1657,51 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
   }
 
   Future<void> _onUpdateOrderStatus(AdminUpdateOrderStatus event, Emitter<AdminState> emit) async {
-    emit(state.copyWith(status: AdminStatus.loading));
+    final now = DateTime.now();
+    // 1. Cập nhật lạc quan (Optimistic update) trên state
+    final updatedOrders = state.orders.map((o) {
+      if (o.id == event.orderId) {
+        return EcommerceOrder(
+          id: o.id,
+          buyerId: o.buyerId,
+          shopId: o.shopId,
+          shopName: o.shopName,
+          shopOwnerId: o.shopOwnerId,
+          orderCode: o.orderCode,
+          status: event.status,
+          subtotalAmount: o.subtotalAmount,
+          discountAmount: o.discountAmount,
+          shippingAmount: o.shippingAmount,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          addressSnapshot: o.addressSnapshot,
+          note: o.note,
+          placedAt: o.placedAt,
+          updatedAt: now,
+          confirmedAt: o.confirmedAt,
+          shippedAt: o.shippedAt,
+          deliveredAt: event.status == 'completed' ? now : o.deliveredAt,
+          shippingCarrier: o.shippingCarrier,
+          shippingService: o.shippingService,
+          trackingCode: o.trackingCode,
+          currentLocation: event.status == 'completed' ? 'Đã giao thành công' : o.currentLocation,
+          pickupLocation: o.pickupLocation,
+          estimatedDeliveryAt: o.estimatedDeliveryAt,
+          cancelReason: o.cancelReason,
+          items: o.items,
+          trackingEvents: o.trackingEvents,
+        );
+      }
+      return o;
+    }).toList();
+    emit(state.copyWith(orders: updatedOrders));
+
+    // 2. Gửi cập nhật trực tiếp lên database Supabase
     try {
       await Supabase.instance.client.from('orders').update({
         'status': event.status,
-        'updated_at': DateTime.now().toIso8601String(),
+        if (event.status == 'completed') 'delivered_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
       }).eq('id', event.orderId);
     } catch (_) {
       final index = AdminFallbackStore.orders.indexWhere((o) => o.id == event.orderId);
@@ -1023,14 +1722,424 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
           addressSnapshot: old.addressSnapshot,
           note: old.note,
           placedAt: old.placedAt,
-          updatedAt: DateTime.now(),
+          updatedAt: now,
           items: old.items,
+          trackingEvents: old.trackingEvents,
         );
       }
     }
-    final currentShopId =
-        AdminSession.loggedInRole == 'shop' ? AdminSession.loggedInShopId : null;
-    add(AdminFetchOrders(shopId: currentShopId));
+  }
+
+  Future<void> _onConfirmAndPackOrder(
+    AdminConfirmAndPackOrder event,
+    Emitter<AdminState> emit,
+  ) async {
+    final now = DateTime.now();
+    final newTracking = OrderTrackingEvent(
+      id: 'trk-${now.millisecondsSinceEpoch}',
+      orderId: event.orderId,
+      status: 'packed',
+      title: 'Người bán đã đóng gói hàng',
+      description: event.note ?? 'Đã hoàn tất đóng gói, chờ bàn giao cho đơn vị vận chuyển',
+      actorRole: 'seller',
+      createdAt: now,
+    );
+
+    // 1. Cập nhật lạc quan (Optimistic update) trên state
+    final updatedOrders = state.orders.map((o) {
+      if (o.id == event.orderId) {
+        final updatedEvents = List<OrderTrackingEvent>.from(o.trackingEvents);
+        updatedEvents.insert(0, newTracking);
+
+        return EcommerceOrder(
+          id: o.id,
+          buyerId: o.buyerId,
+          shopId: o.shopId,
+          shopName: o.shopName,
+          shopOwnerId: o.shopOwnerId,
+          orderCode: o.orderCode,
+          status: 'packed',
+          subtotalAmount: o.subtotalAmount,
+          discountAmount: o.discountAmount,
+          shippingAmount: o.shippingAmount,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          addressSnapshot: o.addressSnapshot,
+          note: o.note,
+          placedAt: o.placedAt,
+          updatedAt: now,
+          confirmedAt: now,
+          shippedAt: o.shippedAt,
+          deliveredAt: o.deliveredAt,
+          shippingCarrier: o.shippingCarrier,
+          shippingService: o.shippingService,
+          trackingCode: o.trackingCode,
+          currentLocation: 'Kho người bán (Chờ lấy hàng)',
+          pickupLocation: o.pickupLocation,
+          estimatedDeliveryAt: o.estimatedDeliveryAt,
+          cancelReason: o.cancelReason,
+          items: o.items,
+          trackingEvents: updatedEvents,
+        );
+      }
+      return o;
+    }).toList();
+    emit(state.copyWith(orders: updatedOrders));
+
+    // 2. Gửi cập nhật trực tiếp lên database Supabase
+    try {
+      await Supabase.instance.client.from('orders').update({
+        'status': 'packed',
+        'confirmed_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      }).eq('id', event.orderId);
+
+      try {
+        await Supabase.instance.client.from('order_tracking_events').insert({
+          'order_id': event.orderId,
+          'status': 'packed',
+          'title': 'Người bán đã đóng gói hàng',
+          'description': event.note ?? 'Đã hoàn tất đóng gói, chờ bàn giao cho đơn vị vận chuyển',
+          'actor_role': 'seller',
+        });
+      } catch (_) {}
+    } catch (_) {
+      final idx = AdminFallbackStore.orders.indexWhere((o) => o.id == event.orderId);
+      if (idx != -1) {
+        final old = AdminFallbackStore.orders[idx];
+        final newEvents = List<OrderTrackingEvent>.from(old.trackingEvents);
+        newEvents.insert(0, newTracking);
+        AdminFallbackStore.orders[idx] = EcommerceOrder(
+          id: old.id,
+          buyerId: old.buyerId,
+          shopId: old.shopId,
+          shopName: old.shopName,
+          orderCode: old.orderCode,
+          status: 'packed',
+          subtotalAmount: old.subtotalAmount,
+          discountAmount: old.discountAmount,
+          shippingAmount: old.shippingAmount,
+          totalAmount: old.totalAmount,
+          currency: old.currency,
+          addressSnapshot: old.addressSnapshot,
+          note: old.note,
+          placedAt: old.placedAt,
+          updatedAt: now,
+          confirmedAt: now,
+          shippingCarrier: old.shippingCarrier,
+          trackingCode: old.trackingCode,
+          currentLocation: 'Kho người bán (Chờ lấy hàng)',
+          items: old.items,
+          trackingEvents: newEvents,
+        );
+      }
+    }
+  }
+
+  Future<void> _onHandoverOrderToCarrier(
+    AdminHandoverOrderToCarrier event,
+    Emitter<AdminState> emit,
+  ) async {
+    final now = DateTime.now();
+    final code = (event.trackingCode != null && event.trackingCode!.trim().isNotEmpty)
+        ? event.trackingCode!.trim()
+        : 'SHC${now.millisecondsSinceEpoch.toString().substring(5)}';
+    final hub = (event.pickupHub != null && event.pickupHub!.trim().isNotEmpty)
+        ? event.pickupHub!.trim()
+        : 'Bưu cục nhận hàng';
+
+    final newTracking = OrderTrackingEvent(
+      id: 'trk-${now.millisecondsSinceEpoch}',
+      orderId: event.orderId,
+      status: 'shipping',
+      title: 'Đã bàn giao cho ${event.carrier}',
+      location: hub,
+      carrierName: event.carrier,
+      description: 'Kiện hàng đã rời điểm nhận hàng và được chuyển về trung tâm khai thác',
+      actorRole: 'carrier',
+      createdAt: now,
+    );
+
+    // 1. Cập nhật lạc quan (Optimistic update) trên state
+    final updatedOrders = state.orders.map((o) {
+      if (o.id == event.orderId) {
+        final updatedEvents = List<OrderTrackingEvent>.from(o.trackingEvents);
+        updatedEvents.insert(0, newTracking);
+
+        return EcommerceOrder(
+          id: o.id,
+          buyerId: o.buyerId,
+          shopId: o.shopId,
+          shopName: o.shopName,
+          shopOwnerId: o.shopOwnerId,
+          orderCode: o.orderCode,
+          status: 'shipping',
+          subtotalAmount: o.subtotalAmount,
+          discountAmount: o.discountAmount,
+          shippingAmount: o.shippingAmount,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          addressSnapshot: o.addressSnapshot,
+          note: o.note,
+          placedAt: o.placedAt,
+          updatedAt: now,
+          confirmedAt: o.confirmedAt,
+          shippedAt: now,
+          deliveredAt: o.deliveredAt,
+          shippingCarrier: event.carrier,
+          shippingService: o.shippingService,
+          trackingCode: code,
+          currentLocation: hub,
+          pickupLocation: hub,
+          estimatedDeliveryAt: o.estimatedDeliveryAt,
+          cancelReason: o.cancelReason,
+          items: o.items,
+          trackingEvents: updatedEvents,
+        );
+      }
+      return o;
+    }).toList();
+    emit(state.copyWith(orders: updatedOrders));
+
+    // 2. Gửi cập nhật trực tiếp lên database Supabase
+    try {
+      await Supabase.instance.client.from('orders').update({
+        'status': 'shipping',
+        'shipping_carrier': event.carrier,
+        'tracking_code': code,
+        'current_location': hub,
+        'pickup_location': hub,
+        'shipped_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      }).eq('id', event.orderId);
+
+      try {
+        await Supabase.instance.client.from('order_tracking_events').insert({
+          'order_id': event.orderId,
+          'status': 'shipping',
+          'title': 'Đã bàn giao cho ${event.carrier}',
+          'location': hub,
+          'carrier_name': event.carrier,
+          'description': 'Kiện hàng đã rời điểm nhận hàng và được chuyển về trung tâm khai thác',
+          'actor_role': 'carrier',
+        });
+      } catch (_) {}
+    } catch (_) {
+      final idx = AdminFallbackStore.orders.indexWhere((o) => o.id == event.orderId);
+      if (idx != -1) {
+        final old = AdminFallbackStore.orders[idx];
+        final newEvents = List<OrderTrackingEvent>.from(old.trackingEvents);
+        newEvents.insert(0, newTracking);
+        AdminFallbackStore.orders[idx] = EcommerceOrder(
+          id: old.id,
+          buyerId: old.buyerId,
+          shopId: old.shopId,
+          shopName: old.shopName,
+          orderCode: old.orderCode,
+          status: 'shipping',
+          subtotalAmount: old.subtotalAmount,
+          discountAmount: old.discountAmount,
+          shippingAmount: old.shippingAmount,
+          totalAmount: old.totalAmount,
+          currency: old.currency,
+          addressSnapshot: old.addressSnapshot,
+          note: old.note,
+          placedAt: old.placedAt,
+          updatedAt: now,
+          shippedAt: now,
+          shippingCarrier: event.carrier,
+          trackingCode: code,
+          currentLocation: hub,
+          items: old.items,
+          trackingEvents: newEvents,
+        );
+      }
+    }
+  }
+
+  Future<void> _onAdvanceOrderLocation(
+    AdminAdvanceOrderLocation event,
+    Emitter<AdminState> emit,
+  ) async {
+    final now = DateTime.now();
+    final isCompleted = event.stepStatus == 'completed';
+    final nextStatus = isCompleted ? 'completed' : 'shipping';
+
+    final newTracking = OrderTrackingEvent(
+      id: 'trk-${now.millisecondsSinceEpoch}',
+      orderId: event.orderId,
+      status: event.stepStatus,
+      title: event.title,
+      location: event.location,
+      description: event.description,
+      carrierName: 'SPX Express',
+      actorRole: 'carrier',
+      createdAt: now,
+    );
+
+    // 1. Cập nhật lạc quan (Optimistic update) NGAY LẬP TỨC trên state
+    // Giúp giao diện cập nhật vị trí mới trong 1ms mà không phụ thuộc vào mạng
+    final updatedOrders = state.orders.map((o) {
+      if (o.id == event.orderId) {
+        final updatedEvents = List<OrderTrackingEvent>.from(o.trackingEvents);
+        updatedEvents.insert(0, newTracking);
+
+        return EcommerceOrder(
+          id: o.id,
+          buyerId: o.buyerId,
+          shopId: o.shopId,
+          shopName: o.shopName,
+          shopOwnerId: o.shopOwnerId,
+          orderCode: o.orderCode,
+          status: nextStatus,
+          subtotalAmount: o.subtotalAmount,
+          discountAmount: o.discountAmount,
+          shippingAmount: o.shippingAmount,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          addressSnapshot: o.addressSnapshot,
+          note: o.note,
+          placedAt: o.placedAt,
+          updatedAt: now,
+          confirmedAt: o.confirmedAt,
+          shippedAt: o.shippedAt,
+          deliveredAt: isCompleted ? now : o.deliveredAt,
+          shippingCarrier: o.shippingCarrier ?? 'SPX Express',
+          shippingService: o.shippingService,
+          trackingCode: o.trackingCode,
+          currentLocation: event.location, // <-- Vị trí mới được cập nhật ngay lập tức
+          pickupLocation: o.pickupLocation,
+          estimatedDeliveryAt: o.estimatedDeliveryAt,
+          cancelReason: o.cancelReason,
+          items: o.items,
+          trackingEvents: updatedEvents,
+        );
+      }
+      return o;
+    }).toList();
+    emit(state.copyWith(orders: updatedOrders));
+
+    // 2. Gửi lệnh cập nhật trực tiếp lên database Supabase
+    try {
+      await Supabase.instance.client.from('orders').update({
+        'status': nextStatus,
+        'current_location': event.location,
+        if (isCompleted) 'delivered_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      }).eq('id', event.orderId);
+
+      // Thử thêm tracking event vào bảng order_tracking_events nếu có thể
+      try {
+        await Supabase.instance.client.from('order_tracking_events').insert({
+          'order_id': event.orderId,
+          'status': event.stepStatus,
+          'title': event.title,
+          'location': event.location,
+          if (event.description != null && event.description!.trim().isNotEmpty)
+            'description': event.description!.trim(),
+          'actor_role': 'carrier',
+        });
+      } catch (_) {}
+    } catch (_) {
+      final idx = AdminFallbackStore.orders.indexWhere((o) => o.id == event.orderId);
+      if (idx != -1) {
+        final old = AdminFallbackStore.orders[idx];
+        final newEvents = List<OrderTrackingEvent>.from(old.trackingEvents);
+        newEvents.insert(0, newTracking);
+        AdminFallbackStore.orders[idx] = EcommerceOrder(
+          id: old.id,
+          buyerId: old.buyerId,
+          shopId: old.shopId,
+          shopName: old.shopName,
+          orderCode: old.orderCode,
+          status: nextStatus,
+          subtotalAmount: old.subtotalAmount,
+          discountAmount: old.discountAmount,
+          shippingAmount: old.shippingAmount,
+          totalAmount: old.totalAmount,
+          currency: old.currency,
+          addressSnapshot: old.addressSnapshot,
+          note: old.note,
+          placedAt: old.placedAt,
+          updatedAt: now,
+          deliveredAt: isCompleted ? now : old.deliveredAt,
+          shippingCarrier: old.shippingCarrier,
+          trackingCode: old.trackingCode,
+          currentLocation: event.location,
+          items: old.items,
+          trackingEvents: newEvents,
+        );
+      }
+    }
+  }
+
+  Future<void> _onSellerCancelOrder(
+    AdminSellerCancelOrder event,
+    Emitter<AdminState> emit,
+  ) async {
+    final now = DateTime.now();
+    // 1. Cập nhật lạc quan (Optimistic update) trên state
+    final updatedOrders = state.orders.map((o) {
+      if (o.id == event.orderId) {
+        return EcommerceOrder(
+          id: o.id,
+          buyerId: o.buyerId,
+          shopId: o.shopId,
+          shopName: o.shopName,
+          shopOwnerId: o.shopOwnerId,
+          orderCode: o.orderCode,
+          status: 'cancelled',
+          subtotalAmount: o.subtotalAmount,
+          discountAmount: o.discountAmount,
+          shippingAmount: o.shippingAmount,
+          totalAmount: o.totalAmount,
+          currency: o.currency,
+          addressSnapshot: o.addressSnapshot,
+          note: o.note,
+          placedAt: o.placedAt,
+          updatedAt: now,
+          cancelReason: event.reason,
+          items: o.items,
+          trackingEvents: o.trackingEvents,
+        );
+      }
+      return o;
+    }).toList();
+    emit(state.copyWith(orders: updatedOrders));
+
+    // 2. Gửi cập nhật trực tiếp lên database Supabase
+    try {
+      await Supabase.instance.client.from('orders').update({
+        'status': 'cancelled',
+        'cancel_reason': event.reason,
+        'updated_at': now.toIso8601String(),
+      }).eq('id', event.orderId);
+    } catch (_) {
+      final idx = AdminFallbackStore.orders.indexWhere((o) => o.id == event.orderId);
+      if (idx != -1) {
+        final old = AdminFallbackStore.orders[idx];
+        AdminFallbackStore.orders[idx] = EcommerceOrder(
+          id: old.id,
+          buyerId: old.buyerId,
+          shopId: old.shopId,
+          shopName: old.shopName,
+          orderCode: old.orderCode,
+          status: 'cancelled',
+          subtotalAmount: old.subtotalAmount,
+          discountAmount: old.discountAmount,
+          shippingAmount: old.shippingAmount,
+          totalAmount: old.totalAmount,
+          currency: old.currency,
+          addressSnapshot: old.addressSnapshot,
+          note: old.note,
+          placedAt: old.placedAt,
+          updatedAt: now,
+          cancelReason: event.reason,
+          items: old.items,
+          trackingEvents: old.trackingEvents,
+        );
+      }
+    }
   }
 
   Future<void> _onFetchVideos(AdminFetchVideos event, Emitter<AdminState> emit) async {

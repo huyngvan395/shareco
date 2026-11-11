@@ -49,6 +49,16 @@ class NotificationRepositoryImpl implements NotificationRepository {
   }
 
   @override
+  Future<Either<Failure, void>> deleteNotification(String notificationId) async {
+    try {
+      await remote.deleteNotification(notificationId);
+      return const Right(null);
+    } catch (e) {
+      return _handle(e);
+    }
+  }
+
+  @override
   Future<Either<Failure, int>> getUnreadCount() async {
     try {
       return Right(await remote.getUnreadCount());

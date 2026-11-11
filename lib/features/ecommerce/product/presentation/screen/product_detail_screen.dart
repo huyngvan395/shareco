@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:dartz/dartz.dart' hide State;
 
@@ -9,6 +10,8 @@ import '../../../../../core/constants/app_sizes.dart';
 import '../../../../../core/errors/failure.dart';
 import '../../../../../core/helpers/require_auth.dart';
 import '../../../../../di/injector.dart';
+import '../../../../chat/domain/usecases/chat_usecases.dart';
+import '../../../../../routes/app_router.dart';
 import '../../../cart/domain/usecases/add_to_cart_usecase.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/entities/product_variant.dart';
@@ -73,6 +76,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
               actions: [
+                if (product != null)
+                  IconButton(
+                    tooltip: 'Chia sẻ sản phẩm',
+                    icon: const Icon(Icons.share_outlined),
+                    onPressed: () {
+                      SharePlus.instance.share(
+                        ShareParams(
+                          text:
+                              'Khám phá "${product.title}" trên ShareCo Shop: https://shareco/products/${product.id}',
+                        ),
+                      );
+                    },
+                  ),
                 IconButton(
                   tooltip: 'Giỏ hàng',
                   icon: const Icon(Icons.shopping_cart_outlined),
@@ -91,6 +107,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     isLoading: _isAddingToCart,
                     onOpenShop: product.shopId.isNotEmpty
                         ? () => context.push('/shop/${product.shopId}')
+                        : null,
+                    onChatShop: product.shopId.isNotEmpty
+                        ? () => _chatWithShop(product)
                         : null,
                     onAddToCart: () {
                       context.requireAuth(
@@ -149,6 +168,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           child: _ProductInfo(
             product: product,
             selectedVariant: selectedVariant,
+            onChatShop: product.shopId.isNotEmpty ? () => _chatWithShop(product) : null,
           ),
         ),
         if (product.variants.isNotEmpty)
@@ -196,6 +216,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return product.variants.first;
   }
 
+  Future<void> _chatWithShop(Product product) async {
+    if (product.shopId.isEmpty) return;
+    context.requireAuth(() async {
+      try {
+        final getOrCreateShop = sl<GetOrCreateShopConversationUseCase>();
+        final res = await getOrCreateShop(
+          shopId: product.shopId,
+          ownerId: '',
+          shopName: product.shopName,
+        );
+        if (!mounted) return;
+        res.fold(
+          (l) => ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l.message)),
+          ),
+          (conv) => context.push(Routes.messages, extra: conv),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể mở chat với Shop: $e')),
+        );
+      }
+    });
+  }
+
   Future<void> _addToCart(
     Product product,
     ProductVariant? selectedVariant,
@@ -236,10 +282,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 class _ProductInfo extends StatelessWidget {
   final Product product;
   final ProductVariant? selectedVariant;
+  final VoidCallback? onChatShop;
 
   const _ProductInfo({
     required this.product,
     required this.selectedVariant,
+    this.onChatShop,
   });
 
   @override
@@ -327,7 +375,41 @@ class _ProductInfo extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (product.shopId.isNotEmpty)
+                  if (product.shopId.isNotEmpty && onChatShop != null) ...[
+                    GestureDetector(
+                      onTap: onChatShop,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0EC),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFF5722)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 13,
+                              color: Color(0xFFFF5722),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Chat',
+                              style: TextStyle(
+                                color: Color(0xFFFF5722),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -347,6 +429,7 @@ class _ProductInfo extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ],
                 ],
               ),
             ),
@@ -445,6 +528,7 @@ class _ProductActionBar extends StatelessWidget {
   final ProductVariant? selectedVariant;
   final bool isLoading;
   final VoidCallback? onOpenShop;
+  final VoidCallback? onChatShop;
   final VoidCallback onAddToCart;
   final VoidCallback onBuyNow;
 
@@ -453,6 +537,7 @@ class _ProductActionBar extends StatelessWidget {
     required this.selectedVariant,
     required this.isLoading,
     this.onOpenShop,
+    this.onChatShop,
     required this.onAddToCart,
     required this.onBuyNow,
   });
@@ -474,22 +559,51 @@ class _ProductActionBar extends StatelessWidget {
                 onTap: onOpenShop,
                 borderRadius: BorderRadius.circular(8),
                 child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         Icons.storefront_outlined,
                         color: Colors.black87,
-                        size: 22,
+                        size: 20,
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Cửa hàng',
+                        'Shop',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           color: Colors.black87,
                           fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            if (onChatShop != null) ...[
+              InkWell(
+                onTap: onChatShop,
+                borderRadius: BorderRadius.circular(8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: Color(0xFFFF5722),
+                        size: 20,
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Chat',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Color(0xFFFF5722),
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],

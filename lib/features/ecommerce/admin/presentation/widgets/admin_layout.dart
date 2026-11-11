@@ -128,10 +128,19 @@ class AdminLayout extends StatelessWidget {
                         _buildMenuItem(
                           context: context,
                           icon: Icons.storefront_rounded,
-                          label: 'Nhãn hàng & Đối tác',
-                          subtitle: 'Duyệt shop, tích xanh',
+                          label: 'Phê duyệt Gian hàng',
+                          subtitle: 'Xét duyệt đơn, tích xanh Mall',
                           route: AdminRouter.shops,
                           isActive: currentRoute == AdminRouter.shops,
+                        ),
+                        const SizedBox(height: 6),
+                        _buildMenuItem(
+                          context: context,
+                          icon: Icons.people_alt_rounded,
+                          label: 'Người dùng & Creator',
+                          subtitle: 'Cấp tích xanh, ban nick, cấm live',
+                          route: AdminRouter.users,
+                          isActive: currentRoute == AdminRouter.users,
                         ),
                         const SizedBox(height: 6),
                         _buildMenuItem(
@@ -224,6 +233,52 @@ class AdminLayout extends StatelessWidget {
                   ),
                 ),
 
+                // Switch Shop Banner in Sidebar if user owns multiple shops
+                if (!isAdmin && AdminSession.userShops.length > 1) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    child: InkWell(
+                      onTap: () => _showSwitchShopDialog(context),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AdminPalette.primary.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AdminPalette.primaryLight.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 16,
+                              color: AdminPalette.accent,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Đổi Gian Hàng (${AdminSession.userShops.length} shop)',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_right_rounded,
+                              size: 16,
+                              color: Colors.white70,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
                 // Sidebar Footer (Logged in profile info)
                 const Divider(color: Color(0xFF1E293B), height: 1),
                 Container(
@@ -239,23 +294,31 @@ class AdminLayout extends StatelessWidget {
                             colors: [AdminPalette.primaryLight, AdminPalette.accent],
                           ),
                           borderRadius: BorderRadius.circular(10),
+                          image: AdminSession.loggedInShopLogo != null
+                              ? DecorationImage(
+                                  image: NetworkImage(AdminSession.loggedInShopLogo!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
                         ),
                         alignment: Alignment.center,
-                        child: Builder(
-                          builder: (_) {
-                            final name = (AdminSession.loggedInShopName ?? '').trim();
-                            final initial =
-                                name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'A';
-                            return Text(
-                              initial,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
-                            );
-                          },
-                        ),
+                        child: AdminSession.loggedInShopLogo == null
+                            ? Builder(
+                                builder: (_) {
+                                  final name = (AdminSession.loggedInShopName ?? '').trim();
+                                  final initial =
+                                      name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'A';
+                                  return Text(
+                                    initial,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
+                                  );
+                                },
+                              )
+                            : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -295,7 +358,12 @@ class AdminLayout extends StatelessWidget {
                             AdminSession.loggedInRole = null;
                             AdminSession.loggedInShopId = null;
                             AdminSession.loggedInShopName = null;
+                            AdminSession.loggedInShopLogo = null;
+                            AdminSession.loggedInShopSlug = null;
+                            AdminSession.loggedInShopStatus = null;
+                            AdminSession.loggedInUserId = null;
                             AdminSession.loggedInEmail = null;
+                            AdminSession.userShops = [];
 
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Đã đăng xuất khỏi cổng quản trị!')),
@@ -346,6 +414,21 @@ class AdminLayout extends StatelessWidget {
                         children: [
                           _buildConnectionPill(),
                           const SizedBox(width: 12),
+                          if (!isAdmin && AdminSession.userShops.length > 1) ...[
+                            OutlinedButton.icon(
+                              onPressed: () => _showSwitchShopDialog(context),
+                              icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                              label: Text('Đổi Shop (${AdminSession.userShops.length})'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AdminPalette.primary,
+                                side: const BorderSide(color: AdminPalette.primaryLight),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                             decoration: BoxDecoration(
@@ -499,6 +582,132 @@ class AdminLayout extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  void _showSwitchShopDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.swap_horiz_rounded, color: AdminPalette.primary),
+            SizedBox(width: 10),
+            Text('Chuyển Đổi Gian Hàng Quản Lý', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          ],
+        ),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: AdminSession.userShops.map((shop) {
+                final isCurrent = shop['id'] == AdminSession.loggedInShopId;
+                final logoUrl = shop['logo_path'];
+                final shopName = shop['shop_name'] ?? 'Gian hàng';
+                final status = shop['status'] ?? 'active';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: isCurrent ? AdminPalette.primary.withValues(alpha: 0.08) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isCurrent ? AdminPalette.primary : AdminPalette.border,
+                      width: isCurrent ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AdminPalette.border),
+                        image: logoUrl != null
+                            ? DecorationImage(image: NetworkImage(logoUrl), fit: BoxFit.cover)
+                            : null,
+                      ),
+                      child: logoUrl == null
+                          ? const Icon(Icons.store_rounded, color: AdminPalette.textSecondary)
+                          : null,
+                    ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            shopName,
+                            style: TextStyle(
+                              fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w700,
+                              fontSize: 13.5,
+                              color: isCurrent ? AdminPalette.primary : AdminPalette.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isCurrent) ...[
+                          const SizedBox(width: 6),
+                          const Text(
+                            '(Đang chọn)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AdminPalette.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    subtitle: Text(
+                      '@${shop['shop_slug'] ?? 'shop'} • ${status == "pending" ? "⏳ Chờ duyệt" : "✅ Hoạt động"}',
+                      style: const TextStyle(fontSize: 11.5, color: AdminPalette.textSecondary),
+                    ),
+                    trailing: isCurrent
+                        ? const Icon(Icons.check_circle_rounded, color: AdminPalette.primary)
+                        : ElevatedButton(
+                            onPressed: () {
+                              AdminSession.loggedInShopId = shop['id'];
+                              AdminSession.loggedInShopName = shop['shop_name'];
+                              AdminSession.loggedInShopLogo = shop['logo_path'];
+                              AdminSession.loggedInShopSlug = shop['shop_slug'];
+                              AdminSession.loggedInShopStatus = shop['status'];
+
+                              Navigator.pop(dialogCtx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Đã chuyển sang quản lý gian hàng [$shopName]! 🏪'),
+                                  backgroundColor: AdminPalette.success,
+                                ),
+                              );
+
+                              // Điều hướng làm mới trang
+                              final currentRoute = GoRouterState.of(context).matchedLocation;
+                              context.go(AdminRouter.shops);
+                              Future.microtask(() {
+                                if (context.mounted) {
+                                  context.go(currentRoute);
+                                }
+                              });
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AdminPalette.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('Chọn', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Đóng')),
         ],
       ),
     );

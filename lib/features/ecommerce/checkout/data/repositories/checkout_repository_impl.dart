@@ -17,12 +17,18 @@ class CheckoutRepositoryImpl implements CheckoutRepository {
     required CheckoutAddress address,
     String? note,
     double discountAmount = 0.0,
+    double shippingAmount = 0.0,
+    String shippingService = 'fast',
+    String? shippingCarrier,
   }) async {
     try {
       final result = await remoteDataSource.placeOrder(
         address: address,
         note: note,
         discountAmount: discountAmount,
+        shippingAmount: shippingAmount,
+        shippingService: shippingService,
+        shippingCarrier: shippingCarrier,
       );
       return Right(result);
     } on AuthException catch (e) {
@@ -42,6 +48,9 @@ class CheckoutRepositoryImpl implements CheckoutRepository {
     required int qty,
     String? note,
     double discountAmount = 0.0,
+    double shippingAmount = 0.0,
+    String shippingService = 'fast',
+    String? shippingCarrier,
   }) async {
     try {
       final result = await remoteDataSource.placeDirectOrder(
@@ -51,6 +60,9 @@ class CheckoutRepositoryImpl implements CheckoutRepository {
         qty: qty,
         note: note,
         discountAmount: discountAmount,
+        shippingAmount: shippingAmount,
+        shippingService: shippingService,
+        shippingCarrier: shippingCarrier,
       );
       return Right(result);
     } on AuthException catch (e) {

@@ -9,7 +9,10 @@ class CancelOrderUseCase {
 
   const CancelOrderUseCase(this.repository);
 
-  Future<Either<Failure, EcommerceOrder>> call(String orderId) {
-    return repository.cancelOrder(orderId);
+  Future<Either<Failure, EcommerceOrder>> call(
+    String orderId, {
+    String? reason,
+  }) {
+    return repository.cancelOrder(orderId, reason: reason);
   }
 }

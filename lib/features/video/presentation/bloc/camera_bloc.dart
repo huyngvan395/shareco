@@ -162,9 +162,21 @@ class CameraBloc extends Bloc<CameraEvent, CameraState> {
       emit(state.copyWith(durationLimit: e.limit));
   void _onBeautyToggle(CameraBeautyToggled _, Emitter<CameraState> emit) =>
       emit(state.copyWith(beautyEnabled: !state.beautyEnabled));
+
   void _onBeautyEffect(CameraBeautyEffectChanged e, Emitter<CameraState> emit) {
-    final updated = state.beautyEffects.map((ef) { if (ef.id == e.effectId) ef.value = e.value; return ef; }).toList();
-    emit(state.copyWith(beautyEffects: updated));
+    final currentList = state.beautyEffects.isEmpty
+        ? AppBeautyEffects.defaults()
+        : state.beautyEffects;
+    final updated = currentList
+        .map((ef) => ef.id == e.effectId ? ef.copyWith(value: e.value) : ef)
+        .toList();
+    final anyActive = updated.any((ef) => ef.value > 0.01);
+    emit(
+      state.copyWith(
+        beautyEffects: updated,
+        beautyEnabled: anyActive,
+      ),
+    );
   }
   void _onStickerAdd(CameraStickerAdded e, Emitter<CameraState> emit) =>
       emit(state.copyWith(stickers: [...state.stickers, e.sticker]));

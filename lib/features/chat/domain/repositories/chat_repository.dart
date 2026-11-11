@@ -15,6 +15,15 @@ abstract class ChatRepository {
   Future<Either<Failure, ConversationEntity>> getOrCreateConversation(
       String otherUserId);
 
+  /// Get or create a dedicated Shop CSKH conversation
+  Future<Either<Failure, ConversationEntity>> getOrCreateShopConversation({
+    required String shopId,
+    required String ownerId,
+    String? shopName,
+    String? shopLogo,
+    bool? isShopVerified,
+  });
+
   /// Load paginated messages for a conversation
   Future<Either<Failure, PaginatedResult<MessageEntity>>> getMessages({
     required String conversationId,

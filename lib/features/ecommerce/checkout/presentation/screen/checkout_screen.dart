@@ -51,6 +51,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   double _discountAmount = 0.0;
   final _voucherCodeCtrl = TextEditingController();
   String _paymentMethod = 'cod'; // 'cod', 'card', 'qr'
+  String _shippingService = 'fast'; // 'standard', 'fast', 'express'
+  String _shippingCarrier = 'SPX Express';
   final _cardNumberCtrl = TextEditingController();
   final _cardNameCtrl = TextEditingController();
   final _cardExpiryCtrl = TextEditingController();
@@ -321,6 +323,45 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  double get _shippingFee {
+    switch (_shippingService) {
+      case 'express':
+        return 55000.0;
+      case 'standard':
+        return 15000.0;
+      case 'fast':
+      default:
+        return 30000.0;
+    }
+  }
+
+  String get _shippingServiceLabel {
+    switch (_shippingService) {
+      case 'express':
+        return 'Hỏa tốc 24H';
+      case 'standard':
+        return 'Tiết kiệm';
+      case 'fast':
+      default:
+        return 'Nhanh';
+    }
+  }
+
+  String get _shippingEtaLabel {
+    final now = DateTime.now();
+    final startDays = _shippingService == 'express'
+        ? 0
+        : (_shippingService == 'standard' ? 4 : 2);
+    final endDays = _shippingService == 'express'
+        ? 1
+        : (_shippingService == 'standard' ? 6 : 3);
+    final fmt = DateFormat('dd/MM');
+    if (startDays == 0) {
+      return 'Nhận hàng trong ngày - ${fmt.format(now.add(Duration(days: endDays)))}';
+    }
+    return 'Nhận hàng dự kiến ${fmt.format(now.add(Duration(days: startDays)))} - ${fmt.format(now.add(Duration(days: endDays)))}';
+  }
+
   void _executeOrderPlacement(CheckoutAddress address) {
     final isDirect = widget.directOrderArgs != null;
     final paymentLabel = _paymentMethod == 'cod'
@@ -341,6 +382,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           qty: widget.directOrderArgs!.qty,
           note: customNote,
           discountAmount: _discountAmount,
+          shippingAmount: _shippingFee,
+          shippingService: _shippingService,
+          shippingCarrier: _shippingCarrier,
         ),
       );
     } else {
@@ -349,6 +393,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           address: address,
           note: customNote,
           discountAmount: _discountAmount,
+          shippingAmount: _shippingFee,
+          shippingService: _shippingService,
+          shippingCarrier: _shippingCarrier,
         ),
       );
     }
@@ -455,7 +502,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ? BlocBuilder<CheckoutBloc, CheckoutState>(
                       builder: (context, checkoutState) {
                         return _CheckoutBar(
-                          totalAmount: (_calculateDirectSubtotal(widget.directOrderArgs!) - _discountAmount).clamp(0.0, double.infinity),
+                          totalAmount: (_calculateDirectSubtotal(widget.directOrderArgs!) + _shippingFee - _discountAmount).clamp(0.0, double.infinity),
                           currency: widget.directOrderArgs!.product.currency,
                           isSubmitting: checkoutState is CheckoutSubmitting,
                           onSubmit: () => _submit(cart),
@@ -467,7 +514,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       : BlocBuilder<CheckoutBloc, CheckoutState>(
                           builder: (context, checkoutState) {
                             return _CheckoutBar(
-                              totalAmount: (cart.subtotal - _discountAmount).clamp(0.0, double.infinity),
+                              totalAmount: (cart.subtotal + _shippingFee - _discountAmount).clamp(0.0, double.infinity),
                               currency: cart.currency,
                               isSubmitting: checkoutState is CheckoutSubmitting,
                               onSubmit: () => _submit(cart),
@@ -544,9 +591,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ),
               const SizedBox(height: AppSizes.md),
+              _buildShippingMethodSection(args.product.currency),
+              const SizedBox(height: AppSizes.md),
               _buildVoucherSection(subtotal),
               const SizedBox(height: AppSizes.md),
-              _buildPaymentMethodSection(subtotal - _discountAmount),
+              _buildPaymentMethodSection(
+                (subtotal + _shippingFee - _discountAmount).clamp(0.0, double.infinity),
+              ),
               const SizedBox(height: AppSizes.md),
               _buildPriceBreakdownSection(subtotal, args.product.currency),
               const SizedBox(height: AppSizes.md),
@@ -646,9 +697,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ),
               const SizedBox(height: AppSizes.md),
+              _buildShippingMethodSection(state.cart.currency),
+              const SizedBox(height: AppSizes.md),
               _buildVoucherSection(subtotal),
               const SizedBox(height: AppSizes.md),
-              _buildPaymentMethodSection(subtotal - _discountAmount),
+              _buildPaymentMethodSection(
+                (subtotal + _shippingFee - _discountAmount).clamp(0.0, double.infinity),
+              ),
               const SizedBox(height: AppSizes.md),
               _buildPriceBreakdownSection(subtotal, state.cart.currency),
               const SizedBox(height: AppSizes.md),
@@ -701,8 +756,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       discount = 100000.0;
       message = 'Đã áp dụng mã giảm giá 100.000đ!';
     } else if (cleanCode == 'FREESHIP') {
-      discount = 30000.0;
-      message = 'Đã áp dụng mã miễn phí vận chuyển 30.000đ!';
+      discount = 30000.0.clamp(0.0, _shippingFee);
+      message = 'Đã áp dụng mã miễn phí vận chuyển (giảm tối đa 30.000đ)!';
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -715,7 +770,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     setState(() {
       _appliedVoucherCode = cleanCode;
-      _discountAmount = discount.clamp(0.0, currentSubtotal);
+      _discountAmount = cleanCode == 'FREESHIP'
+          ? discount
+          : discount.clamp(0.0, currentSubtotal);
       _voucherCodeCtrl.text = cleanCode;
     });
 
@@ -1013,24 +1070,208 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  Widget _buildShippingMethodSection(String currency) {
+    final options = [
+      {
+        'id': 'fast',
+        'name': 'Vận chuyển Nhanh',
+        'eta': 'Nhận hàng trong 2 - 3 ngày',
+        'fee': 30000.0,
+        'icon': Icons.local_shipping_outlined,
+      },
+      {
+        'id': 'standard',
+        'name': 'Tiết kiệm',
+        'eta': 'Nhận hàng trong 4 - 5 ngày',
+        'fee': 15000.0,
+        'icon': Icons.inventory_2_outlined,
+      },
+      {
+        'id': 'express',
+        'name': 'Hỏa tốc 24H',
+        'eta': 'Giao siêu tốc trong 24 giờ',
+        'fee': 55000.0,
+        'icon': Icons.bolt_rounded,
+      },
+    ];
+    final carriers = [
+      'SPX Express',
+      'Giao Hàng Nhanh',
+      'J&T Express',
+      'Viettel Post',
+    ];
+
+    return _SectionCard(
+      title: 'Phương thức vận chuyển',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FAF8),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.teal.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.schedule_rounded, color: Colors.teal, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$_shippingCarrier • $_shippingEtaLabel',
+                    style: const TextStyle(
+                      color: Colors.teal,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSizes.sm),
+          ...options.map((opt) {
+            final id = opt['id'] as String;
+            final fee = opt['fee'] as double;
+            final isSelected = _shippingService == id;
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _shippingService = id;
+                  if (_appliedVoucherCode == 'FREESHIP') {
+                    _discountAmount = 30000.0.clamp(0.0, _shippingFee);
+                  }
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary.withValues(alpha: 0.06)
+                      : const Color(0xFFF8F9FA),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected ? AppColors.primary : Colors.black12,
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      opt['icon'] as IconData,
+                      size: 20,
+                      color: isSelected ? AppColors.primary : Colors.black54,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            opt['name'] as String,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            opt['eta'] as String,
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      _formatAmount(fee, currency),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                        color: isSelected ? AppColors.primary : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 18,
+                      color: isSelected ? AppColors.primary : Colors.black38,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+          const Text(
+            'Đơn vị vận chuyển ưu tiên',
+            style: TextStyle(
+              color: Colors.black54,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: carriers.map((c) {
+              final selected = _shippingCarrier == c;
+              return ChoiceChip(
+                label: Text(c),
+                selected: selected,
+                onSelected: (_) => setState(() => _shippingCarrier = c),
+                selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                backgroundColor: const Color(0xFFF3F4F6),
+                side: BorderSide(
+                  color: selected ? AppColors.primary : Colors.black12,
+                ),
+                labelStyle: TextStyle(
+                  color: selected ? AppColors.primary : Colors.black87,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPriceBreakdownSection(double subtotal, String currency) {
-    final finalTotal = (subtotal - _discountAmount).clamp(0.0, double.infinity);
+    final finalTotal =
+        (subtotal + _shippingFee - _discountAmount).clamp(0.0, double.infinity);
     return _SectionCard(
       title: 'Chi tiết thanh toán',
       child: Column(
         children: [
           _buildPriceRow('Tổng tiền hàng', _formatAmount(subtotal, currency)),
+          const SizedBox(height: AppSizes.sm),
+          _buildPriceRow(
+            'Phí vận chuyển ($_shippingServiceLabel)',
+            _formatAmount(_shippingFee, currency),
+          ),
           if (_discountAmount > 0) ...[
             const SizedBox(height: AppSizes.sm),
             _buildPriceRow(
-              'Giảm giá Voucher',
+              _appliedVoucherCode == 'FREESHIP'
+                  ? 'Miễn phí vận chuyển (FREESHIP)'
+                  : 'Giảm giá Voucher',
               '- ${_formatAmount(_discountAmount, currency)}',
               valueColor: AppColors.success,
               valueWeight: FontWeight.bold,
             ),
           ],
-          const SizedBox(height: AppSizes.sm),
-          _buildPriceRow('Phí vận chuyển', 'Miễn phí', valueColor: AppColors.success),
           const Divider(height: 24),
           _buildPriceRow(
             'Tổng thanh toán',

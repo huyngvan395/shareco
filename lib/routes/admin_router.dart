@@ -5,10 +5,12 @@ import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_produ
 import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_product_form_screen.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_orders_screen.dart';
 import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_videos_screen.dart';
+import 'package:shareco/features/ecommerce/admin/presentation/screen/admin_users_screen.dart';
 
 class AdminRouter {
   static const String login = '/login';
   static const String shops = '/shops';
+  static const String users = '/users';
   static const String products = '/products';
   static const String productCreate = '/products/new';
   static const String productEdit = '/products/:id/edit';
@@ -43,6 +45,12 @@ class AdminRouter {
         path: shops,
         pageBuilder: (context, state) => const NoTransitionPage(
           child: AdminShopsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: users,
+        pageBuilder: (context, state) => const NoTransitionPage(
+          child: AdminUsersScreen(),
         ),
       ),
       GoRoute(

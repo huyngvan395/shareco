@@ -98,6 +98,12 @@ class ConversationModel extends ConversationEntity {
     super.lastSenderId,
     required super.createdAt,
     required super.updatedAt,
+    super.type,
+    super.shopId,
+    super.shopName,
+    super.shopLogo,
+    super.isShopVerified,
+    super.shopOwnerId,
     super.lastReadAt,
     super.isMuted,
   });
@@ -133,6 +139,20 @@ class ConversationModel extends ConversationEntity {
         ? DateTime.tryParse(json['last_message_at'] as String)
         : null;
 
+    final type = (json['type'] as String?) ?? 'direct';
+    Map<String, dynamic>? shopJson;
+    final rawShop = json['shops'];
+    if (rawShop is Map<String, dynamic>) {
+      shopJson = rawShop;
+    } else if (rawShop is List && rawShop.isNotEmpty && rawShop.first is Map<String, dynamic>) {
+      shopJson = rawShop.first as Map<String, dynamic>;
+    }
+    final shopId = (json['shop_id'] as String?) ?? (shopJson?['id'] as String?);
+    final shopName = shopJson?['shop_name'] as String?;
+    final shopLogo = shopJson?['logo_path'] as String?;
+    final isShopVerified = (shopJson?['is_verified'] as bool?) ?? false;
+    final shopOwnerId = shopJson?['owner_id'] as String?;
+
     return ConversationModel(
       id: json['id'] as String,
       participants: participants,
@@ -141,8 +161,47 @@ class ConversationModel extends ConversationEntity {
       lastSenderId: json['last_sender_id'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      type: (shopId != null && shopId.isNotEmpty) ? 'shop' : type,
+      shopId: shopId,
+      shopName: shopName,
+      shopLogo: shopLogo,
+      isShopVerified: isShopVerified,
+      shopOwnerId: shopOwnerId,
       lastReadAt: lastReadAt,
       isMuted: false,
+    );
+  }
+
+  ConversationModel copyWith({
+    String? type,
+    String? shopId,
+    String? shopName,
+    String? shopLogo,
+    bool? isShopVerified,
+    String? shopOwnerId,
+    List<ProfileStubModel>? participants,
+    String? lastMessage,
+    DateTime? lastMessageAt,
+    String? lastSenderId,
+    DateTime? lastReadAt,
+    bool? isMuted,
+  }) {
+    return ConversationModel(
+      id: id,
+      participants: participants ?? this.participants,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      lastSenderId: lastSenderId ?? this.lastSenderId,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      type: type ?? this.type,
+      shopId: shopId ?? this.shopId,
+      shopName: shopName ?? this.shopName,
+      shopLogo: shopLogo ?? this.shopLogo,
+      isShopVerified: isShopVerified ?? this.isShopVerified,
+      shopOwnerId: shopOwnerId ?? this.shopOwnerId,
+      lastReadAt: lastReadAt ?? this.lastReadAt,
+      isMuted: isMuted ?? this.isMuted,
     );
   }
 }

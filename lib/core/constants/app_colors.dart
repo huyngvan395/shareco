@@ -12,22 +12,66 @@ const secondaryGray = Color(0xFF808080);
 
 
 const List<Color> brandGradient = [
-  primaryOrange,
-  primaryPink,
-  primaryPurple,
-  primaryBlue,
+  Color(0xFFFF2D55),
+  Color(0xFFFF6B4A),
+  Color(0xFF20D5EC),
+  Color(0xFFFFC837),
 ];
 
 abstract class AppColors {
   // Brand
   static const primary = Color(0xFFFF2D55);
+  static const primarySoft = Color(0xFFFF5E7E);
   static const secondary = Color(0xFF20D5EC);
   static const accent = Color(0xFFEE1D52);
+  static const indigo = Color(0xFF6366F1);
+  static const gold = Color(0xFFFFC837);
+  static const emerald = Color(0xFF10B981);
+
+  // Unified Modern Dark Surfaces
+  static const surfaceDark = Color(0xFF0B0D14);
+  static const surfaceSheet = Color(0xFF131622);
+  static const surfaceCard = Color(0xFF1B1F2E);
+  static const surfaceElevated = Color(0xFF23283B);
+  static const surfaceGlass = Color(0xA6131622);
+  static const borderSubtle = Color(0x1FFFFFFF);
+  static const borderHighlight = Color(0x3DFFFFFF);
+
+  // Harmonized Brand Gradients
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [Color(0xFFFF2D55), Color(0xFFFF5E62)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient shopGradient = LinearGradient(
+    colors: [Color(0xFFFF7A18), Color(0xFFFF2D55)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient studioGradient = LinearGradient(
+    colors: [Color(0xFF6366F1), Color(0xFF20D5EC)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient liveGradient = LinearGradient(
+    colors: [Color(0xFFFF2D55), Color(0xFFFF6B4A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const LinearGradient emeraldGradient = LinearGradient(
+    colors: [Color(0xFF10B981), Color(0xFF059669)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 
   // Backgrounds
-  static const bgDark = Color(0xFF000000);
-  static const bgCard = Color(0xFF1A1A1A);
-  static const bgInput = Color(0xFF797979);
+  static const bgDark = Color(0xFF0B0D14);
+  static const bgCard = Color(0xFF1B1F2E);
+  static const bgInput = Color(0xFF1E2335);
   static const bgOverlay = Color(0x80000000);
 
   static const bgLight = Color(0xFFFFFFFF);

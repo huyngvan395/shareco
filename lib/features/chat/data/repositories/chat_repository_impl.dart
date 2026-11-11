@@ -42,6 +42,27 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   @override
+  Future<Either<Failure, ConversationEntity>> getOrCreateShopConversation({
+    required String shopId,
+    required String ownerId,
+    String? shopName,
+    String? shopLogo,
+    bool? isShopVerified,
+  }) async {
+    try {
+      return Right(await remote.getOrCreateShopConversation(
+        shopId: shopId,
+        ownerId: ownerId,
+        shopName: shopName,
+        shopLogo: shopLogo,
+        isShopVerified: isShopVerified,
+      ));
+    } catch (e) {
+      return _handle(e);
+    }
+  }
+
+  @override
   Future<Either<Failure, PaginatedResult<MessageEntity>>> getMessages({
     required String conversationId,
     int page = 0,

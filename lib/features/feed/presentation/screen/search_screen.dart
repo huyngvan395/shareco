@@ -144,6 +144,7 @@ class _SearchScreenState extends State<SearchScreen>
                   controller: _controller,
                   focusNode: _focusNode,
                   style: const TextStyle(color: Colors.white, fontSize: 15),
+                  textAlignVertical: TextAlignVertical.center,
                   cursorColor: AppColors.primary,
                   textInputAction: TextInputAction.search,
                   onChanged: (v) =>
@@ -152,7 +153,7 @@ class _SearchScreenState extends State<SearchScreen>
                   decoration: InputDecoration(
                     hintText: 'Tìm video, tài khoản...',
                     hintStyle: TextStyle(
-                      color: Colors.white.withOpacity(0.35),
+                      color: Colors.white.withValues(alpha: 0.35),
                       fontSize: 15,
                     ),
                     prefixIcon: const Icon(
@@ -171,6 +172,8 @@ class _SearchScreenState extends State<SearchScreen>
                           )
                         : null,
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 11),
                   ),
                 ),

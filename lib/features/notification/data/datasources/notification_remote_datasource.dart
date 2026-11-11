@@ -12,6 +12,7 @@ abstract class NotificationRemoteDataSource {
   Future<PaginatedResult<NotificationModel>> getNotifications({int page = 0});
   Future<void> markAsRead(String id);
   Future<void> markAllAsRead();
+  Future<void> deleteNotification(String id);
   Future<int> getUnreadCount();
 }
 
@@ -62,6 +63,15 @@ class NotificationRemoteDataSourceImpl
           .update({'is_read': true})
           .eq('user_id', uid)
           .eq('is_read', false);
+    } catch (e) {
+      throw ServerException(e.toString());
+    }
+  }
+
+  @override
+  Future<void> deleteNotification(String id) async {
+    try {
+      await SupabaseService.from(_table).delete().eq('id', id);
     } catch (e) {
       throw ServerException(e.toString());
     }

@@ -20,6 +20,25 @@ class GetOrCreateConversationUseCase {
       repo.getOrCreateConversation(otherUserId);
 }
 
+class GetOrCreateShopConversationUseCase {
+  final ChatRepository repo;
+  const GetOrCreateShopConversationUseCase(this.repo);
+  Future<Either<Failure, ConversationEntity>> call({
+    required String shopId,
+    required String ownerId,
+    String? shopName,
+    String? shopLogo,
+    bool? isShopVerified,
+  }) =>
+      repo.getOrCreateShopConversation(
+        shopId: shopId,
+        ownerId: ownerId,
+        shopName: shopName,
+        shopLogo: shopLogo,
+        isShopVerified: isShopVerified,
+      );
+}
+
 class GetMessagesUseCase {
   final ChatRepository repo;
   const GetMessagesUseCase(this.repo);

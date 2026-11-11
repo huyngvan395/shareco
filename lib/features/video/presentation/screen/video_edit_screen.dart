@@ -7,9 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:shareco/core/notifier/video_posted_notifier.dart';
+import 'package:shareco/core/services/cloudinary/cloudinary_service.dart';
+import 'package:shareco/features/video/data/datasources/music_search_service.dart';
+import 'package:shareco/features/video/domain/entities/filter_entity.dart';
 import 'package:shareco/features/video/presentation/bloc/create_video_event.dart';
 import 'package:shareco/features/video/presentation/bloc/create_video_state.dart';
+import 'package:video_player/video_player.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/storage_image.dart';
 import '../../../../di/injector.dart';
@@ -20,12 +25,14 @@ import '../bloc/create_video_bloc.dart';
 class VideoEditScreen extends StatefulWidget {
   final String localVideoPath;
   final String? thumbnailPath;
+  final VideoEffectMeta? initialEffects;
   final VoidCallback? onVideoPosted;
 
   const VideoEditScreen({
     super.key,
     required this.localVideoPath,
     this.thumbnailPath,
+    this.initialEffects,
     this.onVideoPosted,
   });
 
@@ -42,10 +49,13 @@ class _VideoEditScreenState extends State<VideoEditScreen>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 4, vsync: this);
-    context.read<CreateVideoBloc>().add(CreateVideoPickedFromPath(
-      localPath: widget.localVideoPath,
-      thumbnailPath: widget.thumbnailPath ?? '',
-    ));
+    context.read<CreateVideoBloc>().add(
+      CreateVideoPickedFromPath(
+        localPath: widget.localVideoPath,
+        thumbnailPath: widget.thumbnailPath ?? '',
+        initialEffects: widget.initialEffects,
+      ),
+    );
   }
 
   @override
@@ -64,7 +74,9 @@ class _VideoEditScreenState extends State<VideoEditScreen>
           widget.onVideoPosted?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Đăng tải thành công! Video đang chờ Admin kiểm duyệt để lên Xu hướng.'),
+              content: Text(
+                'Xuất & đăng tải video thành công! Video đang chờ Admin kiểm duyệt để lên Xu hướng.',
+              ),
               backgroundColor: AppColors.success,
             ),
           );
@@ -79,67 +91,90 @@ class _VideoEditScreenState extends State<VideoEditScreen>
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0A0A0A),
+        backgroundColor: AppColors.surfaceDark,
         appBar: _buildAppBar(),
         body: BlocBuilder<CreateVideoBloc, CreateVideoState>(
           builder: (_, state) {
             if (state is CreateVideoUploading) {
-              return _buildUploading(state.progress);
+              return _buildUploading(state);
             }
-            final taggedCount =
-                state is CreateVideoPickedFile ? state.taggedProducts.length : 0;
+            final picked = state is CreateVideoPickedFile ? state : null;
+            final taggedCount = picked?.taggedProducts.length ?? 0;
+
             return Column(
               children: [
-                // ── Preview strip ──────────────────────────────────────────
+                // ── Interactive TikTok Studio Preview & Effect Editor ─────────
                 _VideoPreviewStrip(
                   localVideoPath: widget.localVideoPath,
-                  thumbnailPath: widget.thumbnailPath,
+                  thumbnailPath: picked?.thumbnailPath ?? widget.thumbnailPath,
+                  pickedState: picked,
                 ),
-                const Divider(height: 1, color: Color(0xFF1E1E1E)),
+                const Divider(height: 1, color: AppColors.borderSubtle),
 
                 // ── Edit panels ────────────────────────────────────────────
                 TabBar(
                   controller: _tabCtrl,
                   indicatorColor: AppColors.primary,
-                  indicatorWeight: 2,
+                  indicatorWeight: 2.5,
                   labelColor: Colors.white,
-                  unselectedLabelColor: const Color(0xFF666666),
-                  dividerColor: const Color(0xFF1E1E1E),
+                  unselectedLabelColor: AppColors.textMuted,
+                  dividerColor: AppColors.borderSubtle,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                   labelStyle: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                   tabs: [
-                    const Tab(text: 'Mô tả'),
-                    Tab(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Sản phẩm'),
-                          if (taggedCount > 0) ...[
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFF6B00),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '$taggedCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                    const Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Mô tả'),
                       ),
                     ),
-                    const Tab(text: 'Ảnh bìa'),
-                    const Tab(text: 'Cài đặt'),
+                    Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Sản phẩm'),
+                            if (taggedCount > 0) ...[
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: AppColors.shopGradient,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '$taggedCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Ảnh bìa'),
+                      ),
+                    ),
+                    const Tab(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Cài đặt'),
+                      ),
+                    ),
                   ],
                 ),
                 Expanded(
@@ -162,271 +197,1942 @@ class _VideoEditScreenState extends State<VideoEditScreen>
   }
 
   PreferredSizeWidget _buildAppBar() => AppBar(
-    backgroundColor: const Color(0xFF0A0A0A),
+    backgroundColor: AppColors.surfaceDark,
     foregroundColor: Colors.white,
     elevation: 0,
-    centerTitle: true,
+    centerTitle: false,
+    titleSpacing: 0,
     title: const Text(
       'Đăng video',
-      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
     ),
     actions: [
       BlocBuilder<CreateVideoBloc, CreateVideoState>(
-        builder: (ctx, state) => Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: TextButton(
-            onPressed: state is CreateVideoUploading
-                ? null
-                : () => ctx.read<CreateVideoBloc>().add(
-              CreateVideoPostRequested(
-                caption: _captionCtrl.text.trim(),
-              ),
+        builder: (ctx, state) {
+          final isTooLarge =
+              state is CreateVideoPickedFile &&
+              state.fileSizeBytes > CloudinaryService.maxVideoSizeBytes;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: state is CreateVideoUploading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: isTooLarge
+                          ? () {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Video vượt quá giới hạn tối đa 100 MB. Vui lòng chọn video nhẹ hơn.',
+                                  ),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          : () => ctx.read<CreateVideoBloc>().add(
+                              CreateVideoPostRequested(
+                                caption: _captionCtrl.text.trim(),
+                              ),
+                            ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: isTooLarge
+                              ? null
+                              : AppColors.primaryGradient,
+                          color: isTooLarge ? Colors.white12 : null,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: isTooLarge
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.movie_creation_outlined,
+                              color: isTooLarge
+                                  ? Colors.white38
+                                  : Colors.white,
+                              size: 15,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Xuất & Đăng',
+                              style: TextStyle(
+                                color: isTooLarge
+                                    ? Colors.white38
+                                    : Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
             ),
-            style: TextButton.styleFrom(
-              backgroundColor: state is CreateVideoUploading
-                  ? Colors.transparent
-                  : AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            ),
-            child: state is CreateVideoUploading
-                ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                color: AppColors.primary,
-                strokeWidth: 2,
-              ),
-            )
-                : const Text(
-              'Đăng',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ),
+          );
+        },
       ),
     ],
   );
 
-  Widget _buildUploading(double progress) => Center(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 48),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.cloud_upload_outlined,
-              color: AppColors.primary,
-              size: 36,
-            ),
+  Widget _buildUploading(CreateVideoUploading uploading) {
+    final progress = uploading.progress.clamp(0.0, 1.0);
+    final percentText = '${(progress * 100).toStringAsFixed(0)}%';
+    final totalMB = uploading.totalBytes / (1024 * 1024);
+    final videoUploadRatio = (progress / 0.88).clamp(0.0, 1.0);
+    final uploadedMB = totalMB * videoUploadRatio;
+
+    String stageTitle;
+    String stageSubtitle;
+    if (progress < 0.08) {
+      stageTitle = 'Đang kết xuất hiệu ứng & âm thanh...';
+      stageSubtitle = uploading.effectMeta.hasAnyEffect
+          ? 'Áp dụng bộ lọc "${uploading.effectMeta.filter.name}"${uploading.effectMeta.music != null ? ' & ghép nhạc "${uploading.effectMeta.music!.title}"' : ''}'
+          : 'Đang chuẩn bị luồng dữ liệu video gốc...';
+    } else if (progress < 0.88) {
+      stageTitle = 'Đang tải video lên máy chủ...';
+      stageSubtitle = totalMB > 0
+          ? 'Đã truyền tải ${uploadedMB.toStringAsFixed(2)} MB / ${totalMB.toStringAsFixed(2)} MB (Giới hạn tối đa ${CloudinaryService.maxVideoSizeMB} MB)'
+          : 'Đang truyền tải dữ liệu video lên đám mây...';
+    } else if (progress < 0.95) {
+      stageTitle = 'Đang tạo & tải lên ảnh bìa...';
+      stageSubtitle = 'Tối ưu hóa ảnh đại diện độ phân giải cao cho video';
+    } else {
+      stageTitle = 'Đang hoàn tất xuất bản...';
+      stageSubtitle = 'Lưu siêu dữ liệu hiệu ứng, âm nhạc và gắn thẻ sản phẩm';
+    }
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141418),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Đang tải video lên...',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Vòng tròn hiển thị % thực tế
+              SizedBox(
+                width: 112,
+                height: 112,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 104,
+                      height: 104,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.white.withOpacity(0.08),
+                        valueColor: const AlwaysStoppedAnimation(
+                          AppColors.primary,
+                        ),
+                        strokeWidth: 7,
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          percentText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Text(
+                          'TIẾN ĐỘ',
+                          style: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                stageTitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                stageSubtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.55),
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Thanh tiến độ Linear + số MB thực tế
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: const Color(0xFF22222A),
+                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                  minHeight: 8,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    totalMB > 0
+                        ? '${uploadedMB.toStringAsFixed(2)} MB / ${totalMB.toStringAsFixed(2)} MB'
+                        : 'Đang đồng bộ...',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    percentText,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const Divider(color: Color(0xFF25252E), height: 1),
+              const SizedBox(height: 14),
+
+              // Các bước xử lý trực quan
+              _UploadStepRow(
+                label: 'Áp dụng Filter màu & đồng bộ nhạc nền',
+                done: progress >= 0.08,
+                active: progress < 0.08,
+              ),
+              const SizedBox(height: 8),
+              _UploadStepRow(
+                label: 'Tải tệp video lên đám mây (Thực tế theo Byte)',
+                done: progress >= 0.88,
+                active: progress >= 0.08 && progress < 0.88,
+              ),
+              const SizedBox(height: 8),
+              _UploadStepRow(
+                label: 'Tải ảnh bìa & xuất bản lên hệ thống',
+                done: progress >= 0.99,
+                active: progress >= 0.88 && progress < 0.99,
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Vui lòng giữ ứng dụng đang mở',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.4),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 28),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: const Color(0xFF1E1E1E),
-              valueColor:
-              const AlwaysStoppedAnimation(AppColors.primary),
-              minHeight: 6,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${(progress * 100).round()}%',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-// ─── Video preview strip ───────────────────────────────────────────────────────
+class _UploadStepRow extends StatelessWidget {
+  final String label;
+  final bool done;
+  final bool active;
 
-class _VideoPreviewStrip extends StatelessWidget {
-  final String localVideoPath;
-  final String? thumbnailPath;
-
-  const _VideoPreviewStrip({
-    required this.localVideoPath,
-    this.thumbnailPath,
+  const _UploadStepRow({
+    required this.label,
+    required this.done,
+    required this.active,
   });
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (done)
+          const Icon(
+            Icons.check_circle_rounded,
+            color: AppColors.success,
+            size: 16,
+          )
+        else if (active)
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              color: AppColors.primary,
+              strokeWidth: 2,
+            ),
+          )
+        else
+          const Icon(
+            Icons.radio_button_unchecked_rounded,
+            color: Colors.white24,
+            size: 16,
+          ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: done
+                  ? Colors.white
+                  : active
+                  ? AppColors.primary
+                  : Colors.white38,
+              fontSize: 12,
+              fontWeight: active || done ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Interactive Video Studio Preview & Effects Bar ──────────────────────────
+
+class _VideoPreviewStrip extends StatefulWidget {
+  final String localVideoPath;
+  final String? thumbnailPath;
+  final CreateVideoPickedFile? pickedState;
+
+  const _VideoPreviewStrip({
+    required this.localVideoPath,
+    this.thumbnailPath,
+    this.pickedState,
+  });
+
+  @override
+  State<_VideoPreviewStrip> createState() => _VideoPreviewStripState();
+}
+
+class _VideoPreviewStripState extends State<_VideoPreviewStrip> {
+  VideoPlayerController? _videoCtrl;
+  final AudioPlayer _musicPlayer = AudioPlayer();
+  bool _videoInitialized = false;
+  String? _loadedMusicId;
+
+  VideoEffectMeta get _fx =>
+      widget.pickedState?.effectMeta ?? const VideoEffectMeta();
+
+  @override
+  void initState() {
+    super.initState();
+    _initPlayers();
+  }
+
+  Future<void> _initPlayers() async {
+    final file = File(widget.localVideoPath);
+    if (!file.existsSync()) return;
+
+    try {
+      final ctrl = VideoPlayerController.file(
+        file,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      await ctrl.initialize();
+      await ctrl.setLooping(true);
+      await ctrl.setVolume(_fx.originalVolume);
+      await ctrl.setPlaybackSpeed(_fx.playbackSpeed);
+      await ctrl.play();
+
+      if (!mounted) {
+        await ctrl.dispose();
+        return;
+      }
+
+      setState(() {
+        _videoCtrl = ctrl;
+        _videoInitialized = true;
+      });
+
+      await _syncMusicWithEffect(_fx);
+    } catch (_) {}
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoPreviewStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldFx = oldWidget.pickedState?.effectMeta;
+    final newFx = _fx;
+    if (oldFx != newFx) {
+      _videoCtrl?.setVolume(newFx.originalVolume);
+      _videoCtrl?.setPlaybackSpeed(newFx.playbackSpeed);
+      _syncMusicWithEffect(newFx);
+    }
+  }
+
+  Future<void> _syncMusicWithEffect(VideoEffectMeta fx) async {
+    final track = fx.music;
+    if (track == null || track.previewUrl == null || track.previewUrl!.isEmpty) {
+      _loadedMusicId = null;
+      await _musicPlayer.stop();
+      return;
+    }
+
+    try {
+      await _musicPlayer.setVolume(fx.musicVolume);
+      if (_loadedMusicId != track.id) {
+        _loadedMusicId = track.id;
+        await _musicPlayer.setUrl(track.previewUrl!);
+        await _musicPlayer.setLoopMode(LoopMode.one);
+      }
+      if (_videoCtrl?.value.isPlaying ?? true) {
+        await _musicPlayer.play();
+      }
+    } catch (_) {}
+  }
+
+  void _togglePlayPause() {
+    final ctrl = _videoCtrl;
+    if (ctrl == null || !_videoInitialized) return;
+    if (ctrl.value.isPlaying) {
+      ctrl.pause();
+      _musicPlayer.pause();
+    } else {
+      ctrl.play();
+      if (_fx.music != null) _musicPlayer.play();
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _musicPlayer.dispose();
+    _videoCtrl?.dispose();
+    super.dispose();
+  }
+
+  void _updateEffects(BuildContext context, VideoEffectMeta updated) {
+    context.read<CreateVideoBloc>().add(CreateVideoEffectUpdated(updated));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fx = _fx;
+    final sizeMB = widget.pickedState?.fileSizeMB ?? 0.0;
+    final maxMB = CloudinaryService.maxVideoSizeMB;
+    final isOverLimit = sizeMB > maxMB;
+    final sizeRatio = (sizeMB / maxMB).clamp(0.0, 1.0);
+
     return Container(
-      height: 160,
-      color: Colors.black,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      color: const Color(0xFF0E0E12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thumbnail preview
-          AspectRatio(
-            aspectRatio: 9 / 16,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildThumbnail(),
-                // Play overlay
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.55),
-                      shape: BoxShape.circle,
+          // ── Khung phát Video Preview trực tiếp có Filter, Text, Sticker ──
+          GestureDetector(
+            onTap: _togglePlayPause,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                width: 112,
+                height: 184,
+                color: const Color(0xFF1A1A1A),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildLiveVideoOrThumb(fx),
+
+                    // Stickers trên khung preview
+                    ...fx.stickers.map(
+                      (s) => Positioned(
+                        left: (s.position.dx * 0.3).clamp(4.0, 82.0),
+                        top: (s.position.dy * 0.3).clamp(8.0, 140.0),
+                        child: Text(
+                          s.emoji,
+                          style: const TextStyle(fontSize: 22),
+                        ),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.play_arrow_rounded,
+
+                    // Text overlays trên khung preview
+                    ...fx.textOverlays.map(
+                      (t) => Positioned(
+                        left: 6,
+                        right: 6,
+                        top: (t.position.dy * 0.3).clamp(16.0, 136.0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            t.text,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: t.color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Badge Filter góc trên trái
+                    if (fx.filterId != 'none')
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            fx.filter.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Play / Pause icon
+                    if (!_videoInitialized ||
+                        !(_videoCtrl?.value.isPlaying ?? false))
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.55),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+
+                    // Thanh nhạc chạy dưới đáy preview
+                    if (fx.music != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 4,
+                          ),
+                          color: Colors.black.withOpacity(0.68),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.music_note_rounded,
+                                color: AppColors.primary,
+                                size: 11,
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  fx.music!.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // ── Cột phải: Thông tin dung lượng + Công cụ Studio (Filter, Nhạc, Chữ, Sticker) ──
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Hộp kiểm tra dung lượng Video & Giới hạn tối đa 100 MB
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isOverLimit
+                        ? Colors.red.withOpacity(0.12)
+                        : const Color(0xFF181820),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isOverLimit
+                          ? Colors.redAccent.withOpacity(0.5)
+                          : Colors.white.withOpacity(0.07),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            isOverLimit
+                                ? Icons.warning_amber_rounded
+                                : Icons.sd_storage_rounded,
+                            size: 13,
+                            color: isOverLimit
+                                ? Colors.redAccent
+                                : AppColors.primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              'Dung lượng: ${sizeMB.toStringAsFixed(1)} MB / Tối đa $maxMB MB',
+                              style: TextStyle(
+                                color: isOverLimit
+                                    ? Colors.redAccent
+                                    : Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: sizeRatio,
+                          minHeight: 4,
+                          backgroundColor: Colors.white10,
+                          valueColor: AlwaysStoppedAnimation(
+                            isOverLimit
+                                ? Colors.redAccent
+                                : sizeMB > 75
+                                ? Colors.orangeAccent
+                                : const Color(0xFF00E676),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // 2. Tiêu đề Studio Hiệu ứng (Không bị tràn lề phải)
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'HIỆU ỨNG & ÂM THANH',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                    if (fx.hasAnyEffect)
+                      GestureDetector(
+                        onTap: () =>
+                            _updateEffects(context, const VideoEffectMeta()),
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Text(
+                            'Đặt lại',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // 3. Lưới 4 nút công cụ Studio (Bộ lọc, Nhạc nền, Chèn chữ, Nhãn dán)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StudioActionTile(
+                        icon: Icons.color_lens_rounded,
+                        title: 'Bộ lọc',
+                        subtitle:
+                            fx.filterId != 'none' ||
+                                fx.playbackSpeed != 1.0 ||
+                                fx.hasBeautyEffect
+                            ? '${fx.filter.name} · ${fx.playbackSpeed}x'
+                            : 'Màu & Làm đẹp',
+                        isActive:
+                            fx.filterId != 'none' ||
+                            fx.playbackSpeed != 1.0 ||
+                            fx.hasBeautyEffect,
+                        accentColor: const Color(0xFFFF2D55),
+                        onTap: () => _openFilterSpeedSheet(context, fx),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _StudioActionTile(
+                        icon: Icons.music_note_rounded,
+                        title: 'Nhạc nền',
+                        subtitle: fx.music != null
+                            ? fx.music!.title
+                            : 'Việt, Anh, Hàn...',
+                        isActive: fx.music != null,
+                        accentColor: const Color(0xFF00C6FF),
+                        onTap: () => _openMusicMixerSheet(context, fx),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StudioActionTile(
+                        icon: Icons.text_fields_rounded,
+                        title: 'Chèn chữ',
+                        subtitle: fx.textOverlays.isNotEmpty
+                            ? 'Đã thêm ${fx.textOverlays.length} dòng'
+                            : 'Thêm tiêu đề',
+                        isActive: fx.textOverlays.isNotEmpty,
+                        accentColor: const Color(0xFFFFB300),
+                        onTap: () => _openTextEditorSheet(context, fx),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _StudioActionTile(
+                        icon: Icons.emoji_emotions_rounded,
+                        title: 'Nhãn dán',
+                        subtitle: fx.stickers.isNotEmpty
+                            ? 'Đã gắn ${fx.stickers.length} nhãn'
+                            : 'Thêm sticker',
+                        isActive: fx.stickers.isNotEmpty,
+                        accentColor: const Color(0xFFAB47BC),
+                        onTap: () => _openStickerPickerSheet(context, fx),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveVideoOrThumb(VideoEffectMeta fx) {
+    Widget content;
+    if (_videoInitialized && _videoCtrl != null) {
+      content = FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: _videoCtrl!.value.size.width > 0
+              ? _videoCtrl!.value.size.width
+              : 720,
+          height: _videoCtrl!.value.size.height > 0
+              ? _videoCtrl!.value.size.height
+              : 1280,
+          child: VideoPlayer(_videoCtrl!),
+        ),
+      );
+    } else if (widget.thumbnailPath != null &&
+        widget.thumbnailPath!.isNotEmpty &&
+        File(widget.thumbnailPath!).existsSync()) {
+      content = Image.file(File(widget.thumbnailPath!), fit: BoxFit.cover);
+    } else {
+      content = Container(
+        color: const Color(0xFF141414),
+        child: const Center(
+          child: Icon(
+            Icons.video_file_rounded,
+            color: Color(0xFF333333),
+            size: 36,
+          ),
+        ),
+      );
+    }
+
+    if (fx.hasBeautyEffect) {
+      content = BeautyEffectProcessor(
+        enabled: fx.beautyEnabled,
+        smooth: fx.beautySmooth,
+        whiten: fx.beautyWhiten,
+        slim: fx.beautySlim,
+        eyes: fx.beautyEyes,
+        child: content,
+      );
+    }
+
+    content = VideoFilterEffectRenderer(
+      filter: fx.filter,
+      child: content,
+    );
+    return content;
+  }
+
+  void _openFilterSpeedSheet(BuildContext context, VideoEffectMeta currentFx) {
+    final bloc = context.read<CreateVideoBloc>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: const _StudioFilterSpeedSheet(),
+      ),
+    );
+  }
+
+  void _openMusicMixerSheet(BuildContext context, VideoEffectMeta currentFx) {
+    final bloc = context.read<CreateVideoBloc>();
+    // Tạm dừng nhạc nền preview bên ngoài khi mở sheet chọn nhạc
+    _musicPlayer.pause();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: const _StudioMusicMixerSheet(),
+      ),
+    ).whenComplete(() {
+      if (mounted) _syncMusicWithEffect(_fx);
+    });
+  }
+
+  void _openTextEditorSheet(BuildContext context, VideoEffectMeta currentFx) {
+    final bloc = context.read<CreateVideoBloc>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: const _StudioTextSheet(),
+      ),
+    );
+  }
+
+  void _openStickerPickerSheet(BuildContext context, VideoEffectMeta currentFx) {
+    final bloc = context.read<CreateVideoBloc>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: const _StudioStickerSheet(),
+      ),
+    );
+  }
+}
+
+class _StudioActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool isActive;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  const _StudioActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.isActive,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive
+              ? accentColor.withValues(alpha: 0.14)
+              : const Color(0xFF181820),
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: isActive
+                ? accentColor.withValues(alpha: 0.6)
+                : Colors.white.withValues(alpha: 0.07),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? accentColor
+                        : Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isActive ? Colors.white : accentColor,
+                    size: 13,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
                       color: Colors.white,
-                      size: 24,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isActive ? accentColor : Colors.white54,
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Studio Bottom Sheets (Filter/Speed, Music Mixer, Text, Sticker) ─────────
+
+class _StudioFilterSpeedSheet extends StatelessWidget {
+  const _StudioFilterSpeedSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<CreateVideoBloc, CreateVideoState>(
+      builder: (ctx, state) {
+        final fx = state is CreateVideoPickedFile
+            ? state.effectMeta
+            : const VideoEffectMeta();
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141418),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          // Video info
-          Expanded(
-            child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.color_lens_rounded,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Bộ lọc màu & Tốc độ video',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        'Xong',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 106,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: AppFilters.all.length,
+                    itemBuilder: (_, i) {
+                      final f = AppFilters.all[i];
+                      final active = fx.filterId == f.id;
+                      return GestureDetector(
+                        onTap: () => ctx.read<CreateVideoBloc>().add(
+                          CreateVideoEffectUpdated(
+                            fx.copyWith(filterId: f.id),
+                          ),
+                        ),
+                        child: Container(
+                          width: 66,
+                          margin: const EdgeInsets.only(right: 10),
+                          child: Column(
+                            children: [
+                              FilterThumbnailBox(
+                                filter: f,
+                                size: 62,
+                                selected: active,
+                                borderRadius: 14,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                f.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: active
+                                      ? AppColors.primary
+                                      : Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: active
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                              Text(
+                                f.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'TỐC ĐỘ PHÁT VIDEO',
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: AppSpeeds.speeds.map((s) {
+                    final active = (fx.playbackSpeed - s.value).abs() < 0.01;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => ctx.read<CreateVideoBloc>().add(
+                          CreateVideoEffectUpdated(
+                            fx.copyWith(playbackSpeed: s.value),
+                          ),
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? AppColors.primary
+                                : const Color(0xFF22222A),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Text(
+                              s.label,
+                              style: TextStyle(
+                                color: active ? Colors.white : Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StudioMusicMixerSheet extends StatefulWidget {
+  const _StudioMusicMixerSheet();
+
+  @override
+  State<_StudioMusicMixerSheet> createState() => _StudioMusicMixerSheetState();
+}
+
+class _StudioMusicMixerSheetState extends State<_StudioMusicMixerSheet> {
+  final AudioPlayer _previewPlayer = AudioPlayer();
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  String? _playingId;
+  bool _isLoadingTracks = true;
+  String _selectedCategory = 'Thịnh hành';
+  List<MusicTrack> _tracks = const [];
+
+  static const _categories = [
+    'Thịnh hành',
+    'Nhạc Việt',
+    'Nhạc Anh',
+    'Nhạc Hàn',
+    'Nhạc Trung',
+    'Remix / EDM',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    MusicSearchService.prefetchAllCategories();
+    _loadCategory(_selectedCategory);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    _previewPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCategory(String category) async {
+    setState(() {
+      _selectedCategory = category;
+      _isLoadingTracks = true;
+    });
+    final list = await MusicSearchService.getTracksByCategory(category);
+    if (!mounted) return;
+    setState(() {
+      _tracks = list;
+      _isLoadingTracks = false;
+    });
+  }
+
+  void _onSearchChanged(String val) {
+    _debounce?.cancel();
+    final q = val.trim();
+    if (q.isEmpty) {
+      _loadCategory(_selectedCategory);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 400), () async {
+      if (!mounted) return;
+      setState(() => _isLoadingTracks = true);
+      final res = await MusicSearchService.searchTracks(
+        q,
+        categoryLabel: _selectedCategory,
+      );
+      if (!mounted) return;
+      setState(() {
+        _tracks = res;
+        _isLoadingTracks = false;
+      });
+    });
+  }
+
+  Future<void> _togglePreview(MusicTrack track) async {
+    if (_playingId == track.id) {
+      await _previewPlayer.stop();
+      if (mounted) setState(() => _playingId = null);
+      return;
+    }
+    if (track.previewUrl == null) return;
+    setState(() => _playingId = track.id);
+    try {
+      await _previewPlayer.setUrl(track.previewUrl!);
+      await _previewPlayer.setLoopMode(LoopMode.one);
+      await _previewPlayer.play();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<CreateVideoBloc, CreateVideoState>(
+      builder: (ctx, state) {
+        final fx = state is CreateVideoPickedFile
+            ? state.effectMeta
+            : const VideoEffectMeta();
+
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.82,
+          decoration: const BoxDecoration(
+            color: Color(0xFF121216),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.library_music_rounded,
+                      color: Color(0xFF00C6FF),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Kho nhạc nền & Hòa âm',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (fx.music != null)
+                      TextButton(
+                        onPressed: () {
+                          _previewPlayer.stop();
+                          ctx.read<CreateVideoBloc>().add(
+                            CreateVideoEffectUpdated(
+                              fx.copyWith(clearMusic: true),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Gỡ nhạc',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        'Xong',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bộ trộn âm lượng (Audio Mixer)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1B22),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.mic_rounded,
+                          color: Colors.white70,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 6),
+                        const SizedBox(
+                          width: 88,
+                          child: Text(
+                            'Âm thanh gốc',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: fx.originalVolume,
+                            min: 0,
+                            max: 1,
+                            activeColor: Colors.white,
+                            onChanged: (v) => ctx.read<CreateVideoBloc>().add(
+                              CreateVideoEffectUpdated(
+                                fx.copyWith(originalVolume: v),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${(fx.originalVolume * 100).round()}%',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.music_note_rounded,
+                          color: Color(0xFF00C6FF),
+                          size: 15,
+                        ),
+                        const SizedBox(width: 6),
+                        const SizedBox(
+                          width: 88,
+                          child: Text(
+                            'Nhạc nền ghép',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: fx.musicVolume,
+                            min: 0,
+                            max: 1,
+                            activeColor: const Color(0xFF00C6FF),
+                            onChanged: (v) {
+                              _previewPlayer.setVolume(v);
+                              ctx.read<CreateVideoBloc>().add(
+                                CreateVideoEffectUpdated(
+                                  fx.copyWith(musicVolume: v),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        Text(
+                          '${(fx.musicVolume * 100).round()}%',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Tìm kiếm bài hát Việt, Anh, Hàn
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: _onSearchChanged,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Tìm bài hát Việt, Anh, Hàn, tên ca sĩ...',
+                    hintStyle: const TextStyle(
+                      color: Colors.white30,
+                      fontSize: 12.5,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: Colors.white38,
+                      size: 18,
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFF1E1E26),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Tabs danh mục nhạc
+              SizedBox(
+                height: 32,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _categories.length,
+                  itemBuilder: (_, i) {
+                    final cat = _categories[i];
+                    final active = _selectedCategory == cat;
+                    return GestureDetector(
+                      onTap: () {
+                        _searchCtrl.clear();
+                        _loadCategory(cat);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: active
+                              ? AppColors.primary
+                              : const Color(0xFF1E1E26),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            color: active ? Colors.white : Colors.white60,
+                            fontSize: 11.5,
+                            fontWeight: active
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1, color: Color(0xFF22222A)),
+              Expanded(
+                child: _isLoadingTracks
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        itemCount: _tracks.length,
+                        itemBuilder: (_, i) {
+                          final t = _tracks[i];
+                          final selected = fx.music?.id == t.id;
+                          final playing = _playingId == t.id;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? AppColors.primary.withValues(alpha: 0.14)
+                                  : const Color(0xFF1A1A22),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected
+                                    ? AppColors.primary
+                                    : Colors.white.withValues(alpha: 0.05),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () => _togglePreview(t),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: t.coverColors,
+                                        ),
+                                      ),
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          if (t.artworkUrl != null &&
+                                              t.artworkUrl!.isNotEmpty)
+                                            CachedNetworkImage(
+                                              imageUrl: t.artworkUrl!,
+                                              fit: BoxFit.cover,
+                                              errorWidget: (_, _, _) =>
+                                                  const SizedBox.shrink(),
+                                            ),
+                                          Container(color: Colors.black26),
+                                          Icon(
+                                            playing
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded,
+                                            color: Colors.white,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        t.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: selected
+                                              ? AppColors.primary
+                                              : Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${t.artist} · ${t.category}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    _previewPlayer.stop();
+                                    AppMusicTracks.registerDynamicTracks([t]);
+                                    ctx.read<CreateVideoBloc>().add(
+                                      CreateVideoEffectUpdated(
+                                        fx.copyWith(
+                                          musicId: selected ? null : t.id,
+                                          customMusic: selected ? null : t,
+                                          clearMusic: selected,
+                                        ),
+                                      ),
+                                    );
+                                    if (!selected) {
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: selected
+                                        ? Colors.white12
+                                        : AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    selected ? 'Đang dùng' : 'Chọn nhạc',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StudioTextSheet extends StatefulWidget {
+  const _StudioTextSheet();
+
+  @override
+  State<_StudioTextSheet> createState() => _StudioTextSheetState();
+}
+
+class _StudioTextSheetState extends State<_StudioTextSheet> {
+  final _ctrl = TextEditingController();
+  Color _color = Colors.white;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<CreateVideoBloc, CreateVideoState>(
+      builder: (ctx, state) {
+        final fx = state is CreateVideoPickedFile
+            ? state.effectMeta
+            : const VideoEffectMeta();
+
+        return Container(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            14,
+            16,
+            MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141418),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   const Text(
-                    'Video đã sẵn sàng',
+                    'Chèn chữ nổi bật vào Video',
                     style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _truncatePath(localVideoPath),
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.45),
-                      fontSize: 11,
+                  const Spacer(),
+                  if (fx.textOverlays.isNotEmpty)
+                    TextButton(
+                      onPressed: () => ctx.read<CreateVideoBloc>().add(
+                        CreateVideoEffectUpdated(
+                          fx.copyWith(textOverlays: const []),
+                        ),
+                      ),
+                      child: const Text(
+                        'Xóa hết',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    Colors.white,
+                    const Color(0xFFFF2D55),
+                    Colors.amber,
+                    Colors.greenAccent,
+                    Colors.lightBlueAccent,
+                    Colors.orangeAccent,
+                    Colors.purpleAccent,
+                  ]
+                      .map(
+                        (c) => GestureDetector(
+                          onTap: () => setState(() => _color = c),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            margin: const EdgeInsets.only(right: 10),
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _color == c
+                                    ? Colors.white
+                                    : Colors.white24,
+                                width: _color == c ? 2.5 : 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _ctrl,
+                      autofocus: true,
+                      style: TextStyle(
+                        color: _color,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Nhập tiêu đề hiển thị trên video...',
+                        hintStyle: const TextStyle(color: Colors.white30),
+                        filled: true,
+                        fillColor: const Color(0xFF22222A),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _InfoChip(
-                        icon: Icons.hd_rounded,
-                        label: 'HD',
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      final text = _ctrl.text.trim();
+                      if (text.isNotEmpty) {
+                        final updated = [
+                          ...fx.textOverlays,
+                          TextOverlay(
+                            id: DateTime.now().millisecondsSinceEpoch
+                                .toString(),
+                            text: text,
+                            color: _color,
+                            position: Offset(
+                              50,
+                              120.0 + fx.textOverlays.length * 45,
+                            ),
+                          ),
+                        ];
+                        ctx.read<CreateVideoBloc>().add(
+                          CreateVideoEffectUpdated(
+                            fx.copyWith(textOverlays: updated),
+                          ),
+                        );
+                      }
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
                       ),
-                      const SizedBox(width: 6),
-                      _InfoChip(
-                        icon: Icons.videocam_rounded,
-                        label: 'MP4',
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ],
+                    ),
+                    child: const Text(
+                      'Thêm',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
-  }
-
-  Widget _buildThumbnail() {
-    if (thumbnailPath != null && thumbnailPath!.isNotEmpty) {
-      final file = File(thumbnailPath!);
-      if (file.existsSync()) {
-        return Image.file(file, fit: BoxFit.cover);
-      }
-    }
-    return Container(
-      color: const Color(0xFF141414),
-      child: const Center(
-        child: Icon(
-          Icons.video_file_rounded,
-          color: Color(0xFF333333),
-          size: 36,
-        ),
-      ),
-    );
-  }
-
-  String _truncatePath(String path) {
-    final parts = path.split('/');
-    return parts.last;
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _InfoChip({required this.icon, required this.label});
+class _StudioStickerSheet extends StatelessWidget {
+  const _StudioStickerSheet();
+  static const _emojis = [
+    '🔥', '❤️', '😂', '🎉', '✨', '💯', '👑', '🌈',
+    '🎵', '🌟', '💪', '🙌', '😍', '🤩', '👏', '🎊',
+    '🦋', '🌸', '💥', '🎯', '🚀', '💎', '🌙', '⚡️',
+  ];
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding:
-    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.white54, size: 12),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+  Widget build(BuildContext context) {
+    return BlocBuilder<CreateVideoBloc, CreateVideoState>(
+      builder: (ctx, state) {
+        final fx = state is CreateVideoPickedFile
+            ? state.effectMeta
+            : const VideoEffectMeta();
+
+        return Container(
+          height: 270,
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141418),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-        ),
-      ],
-    ),
-  );
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Chọn nhãn dán',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (fx.stickers.isNotEmpty)
+                    TextButton(
+                      onPressed: () => ctx.read<CreateVideoBloc>().add(
+                        CreateVideoEffectUpdated(
+                          fx.copyWith(stickers: const []),
+                        ),
+                      ),
+                      child: const Text(
+                        'Xóa hết',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 6,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                  ),
+                  itemCount: _emojis.length,
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () {
+                      final updated = [
+                        ...fx.stickers,
+                        StickerItem(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          emoji: _emojis[i],
+                          label: _emojis[i],
+                          position: Offset(
+                            80.0 + (fx.stickers.length * 35) % 160,
+                            140.0 + (fx.stickers.length * 40) % 200,
+                          ),
+                        ),
+                      ];
+                      ctx.read<CreateVideoBloc>().add(
+                        CreateVideoEffectUpdated(
+                          fx.copyWith(stickers: updated),
+                        ),
+                      );
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          _emojis[i],
+                          style: const TextStyle(fontSize: 26),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
+
 
 // ─── Caption tab ───────────────────────────────────────────────────────────────
 
@@ -548,7 +2254,7 @@ class _CaptionProductLinkSection extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'GẮN LINK SẢN PHẨM (TIKTOK SHOP)',
+                  'GẮN LINK SẢN PHẨM (SHARECO SHOP)',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.3),
                     fontSize: 10,

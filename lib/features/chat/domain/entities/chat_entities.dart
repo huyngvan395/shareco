@@ -93,6 +93,12 @@ class ConversationEntity extends Equatable {
   final String? lastSenderId;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String type; // 'direct', 'shop', 'group'
+  final String? shopId;
+  final String? shopName;
+  final String? shopLogo;
+  final bool isShopVerified;
+  final String? shopOwnerId;
 
   // Client-side
   final DateTime? lastReadAt;
@@ -106,9 +112,71 @@ class ConversationEntity extends Equatable {
     this.lastSenderId,
     required this.createdAt,
     required this.updatedAt,
+    this.type = 'direct',
+    this.shopId,
+    this.shopName,
+    this.shopLogo,
+    this.isShopVerified = false,
+    this.shopOwnerId,
     this.lastReadAt,
     this.isMuted = false,
   });
+
+  bool get isShop => type == 'shop' || (shopId != null && shopId!.isNotEmpty);
+
+  bool isShopOwner(String currentUserId) => isShop && shopOwnerId == currentUserId;
+
+  /// Tên hiển thị chuẩn xác (Shop vs Người mua vs Bạn bè)
+  String getDisplayName(String currentUserId) {
+    if (isShop) {
+      if (isShopOwner(currentUserId)) {
+        final buyer = otherUser(currentUserId);
+        return buyer?.displayName ?? buyer?.username ?? 'Khách hàng';
+      }
+      return (shopName != null && shopName!.trim().isNotEmpty)
+          ? shopName!
+          : 'Gian hàng chính hãng';
+    }
+    final other = otherUser(currentUserId);
+    return other?.displayName ?? other?.username ?? 'Người dùng';
+  }
+
+  /// Avatar hiển thị chuẩn xác (Logo Shop vs Avatar người mua vs Avatar bạn bè)
+  String? getAvatarUrl(String currentUserId) {
+    if (isShop) {
+      if (isShopOwner(currentUserId)) {
+        return otherUser(currentUserId)?.avatarUrl;
+      }
+      return shopLogo;
+    }
+    return otherUser(currentUserId)?.avatarUrl;
+  }
+
+  /// Dòng phụ đề hiển thị trong danh sách hội thoại hoặc appbar
+  String getSubtitle(String currentUserId) {
+    if (isShop) {
+      if (isShopOwner(currentUserId)) {
+        return 'Khách hàng mua sắm';
+      }
+      return 'Gian hàng chính hãng · Chăm sóc khách hàng';
+    }
+    final other = otherUser(currentUserId);
+    if (other != null && other.username.isNotEmpty) {
+      return '@${other.username}';
+    }
+    return '';
+  }
+
+  /// Kiểm tra có tích xanh không
+  bool isVerified(String currentUserId) {
+    if (isShop) {
+      if (isShopOwner(currentUserId)) {
+        return otherUser(currentUserId)?.isVerified ?? false;
+      }
+      return isShopVerified;
+    }
+    return otherUser(currentUserId)?.isVerified ?? false;
+  }
 
   /// The other user in a 1-to-1 conversation
   ProfileStub? otherUser(String myUserId) =>
@@ -122,5 +190,5 @@ class ConversationEntity extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, lastMessage, lastMessageAt, updatedAt, hasUnread];
+      [id, lastMessage, lastMessageAt, updatedAt, hasUnread, type, shopId];
 }

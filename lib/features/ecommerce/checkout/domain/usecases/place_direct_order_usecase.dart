@@ -17,6 +17,9 @@ class PlaceDirectOrderUseCase {
     required int qty,
     String? note,
     double discountAmount = 0.0,
+    double shippingAmount = 0.0,
+    String shippingService = 'fast',
+    String? shippingCarrier,
   }) {
     return repository.placeDirectOrder(
       address: address,
@@ -25,6 +28,9 @@ class PlaceDirectOrderUseCase {
       qty: qty,
       note: note,
       discountAmount: discountAmount,
+      shippingAmount: shippingAmount,
+      shippingService: shippingService,
+      shippingCarrier: shippingCarrier,
     );
   }
 }

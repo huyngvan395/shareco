@@ -44,9 +44,30 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Either<Failure, EcommerceOrder>> cancelOrder(String orderId) async {
+  Future<Either<Failure, EcommerceOrder>> cancelOrder(
+    String orderId, {
+    String? reason,
+  }) async {
     try {
-      final order = await remoteDataSource.cancelOrder(orderId);
+      final order = await remoteDataSource.cancelOrder(orderId, reason: reason);
+      return Right(order.toEntity());
+    } on AuthException catch (e) {
+      return Left(AuthFailure(e.message));
+    } on NotFoundException catch (e) {
+      return Left(NotFoundFailure(e.message));
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, EcommerceOrder>> confirmOrderDelivered(
+    String orderId,
+  ) async {
+    try {
+      final order = await remoteDataSource.confirmOrderDelivered(orderId);
       return Right(order.toEntity());
     } on AuthException catch (e) {
       return Left(AuthFailure(e.message));

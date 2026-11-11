@@ -57,6 +57,37 @@ class OrderDetailCancelFailure extends OrderDetailState {
   List<Object?> get props => [order, message];
 }
 
+class OrderDetailConfirmingDelivery extends OrderDetailState {
+  final EcommerceOrder order;
+
+  const OrderDetailConfirmingDelivery(this.order);
+
+  @override
+  List<Object?> get props => [order];
+}
+
+class OrderDetailConfirmDeliverySuccess extends OrderDetailState {
+  final EcommerceOrder order;
+
+  const OrderDetailConfirmDeliverySuccess(this.order);
+
+  @override
+  List<Object?> get props => [order];
+}
+
+class OrderDetailConfirmDeliveryFailure extends OrderDetailState {
+  final EcommerceOrder order;
+  final String message;
+
+  const OrderDetailConfirmDeliveryFailure({
+    required this.order,
+    required this.message,
+  });
+
+  @override
+  List<Object?> get props => [order, message];
+}
+
 class OrderDetailFailure extends OrderDetailState {
   final String message;
 

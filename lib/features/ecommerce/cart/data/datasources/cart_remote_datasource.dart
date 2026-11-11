@@ -19,6 +19,8 @@ abstract class CartRemoteDataSource {
   });
 
   Future<CartModel> removeCartItem(String itemId);
+
+  void clearCache();
 }
 
 class CartRemoteDataSourceImpl implements CartRemoteDataSource {
@@ -29,6 +31,12 @@ class CartRemoteDataSourceImpl implements CartRemoteDataSource {
 
   String? _cachedUserId;
   String? _cachedCartId;
+
+  @override
+  void clearCache() {
+    _cachedUserId = null;
+    _cachedCartId = null;
+  }
 
   @override
   Future<CartModel> getCart() async {
@@ -140,6 +148,7 @@ class CartRemoteDataSourceImpl implements CartRemoteDataSource {
   Future<_CartRef> _getOrCreateCart() async {
     final userId = SupabaseService.auth.currentUser?.id;
     if (userId == null) {
+      clearCache();
       throw const AuthException('Please sign in to use cart');
     }
 

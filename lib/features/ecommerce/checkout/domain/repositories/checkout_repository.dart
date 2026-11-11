@@ -9,6 +9,9 @@ abstract class CheckoutRepository {
     required CheckoutAddress address,
     String? note,
     double discountAmount = 0.0,
+    double shippingAmount = 0.0,
+    String shippingService = 'fast',
+    String? shippingCarrier,
   });
 
   Future<Either<Failure, CheckoutResult>> placeDirectOrder({
@@ -18,5 +21,8 @@ abstract class CheckoutRepository {
     required int qty,
     String? note,
     double discountAmount = 0.0,
+    double shippingAmount = 0.0,
+    String shippingService = 'fast',
+    String? shippingCarrier,
   });
 }

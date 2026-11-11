@@ -1,5 +1,6 @@
 // features/profile/presentation/screen/profile_feed_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shareco/features/profile/presentation/bloc/profile_bloc.dart';
@@ -21,19 +22,22 @@ class ProfileFeedScreen extends StatefulWidget {
 }
 
 class _ProfileFeedScreenState extends State<ProfileFeedScreen> {
-  final _cache = VideoControllerCache();
+  final _cache = VideoControllerCache(maxControllers: 3);
   late final PageController _pageCtrl;
   int _activePage = 0;
+  Timer? _preloadDebounce;
 
   @override
   void initState() {
     super.initState();
+    VideoControllerCache.pauseAllGlobal(except: _cache);
     _activePage = widget.initialIndex;
     _pageCtrl = PageController(initialPage: widget.initialIndex);
   }
 
   @override
   void dispose() {
+    _preloadDebounce?.cancel();
     _pageCtrl.dispose();
     _cache.disposeAll();
     super.dispose();
@@ -43,19 +47,19 @@ class _ProfileFeedScreenState extends State<ProfileFeedScreen> {
     _cache.pauseAll();
     setState(() => _activePage = page);
 
-    // Preload
-    _preloadAt(videos, page + 1);
-    _preloadAt(videos, page + 2);
+    _preloadDebounce?.cancel();
+    _preloadDebounce = Timer(const Duration(milliseconds: 180), () {
+      if (!mounted) return;
+      final next = page + 1;
+      if (next >= 0 && next < videos.length) {
+        _cache.preload(videos[next].videoPath);
+      }
+    });
 
     // Load more khi gần cuối
     if (page >= videos.length - 3) {
       bloc.add(const ProfileVideosLoadMoreRequested());
     }
-  }
-
-  void _preloadAt(List<VideoEntity> videos, int idx) {
-    if (idx < 0 || idx >= videos.length) return;
-    _cache.getOrCreate(videos[idx].videoPath);
   }
 
   @override
@@ -88,10 +92,11 @@ class _ProfileFeedScreenState extends State<ProfileFeedScreen> {
                   }
                   final video = videos[i];
                   return VideoItem(
-                    key: ValueKey(video.id),
+                    key: ValueKey('profile_${video.id}'),
                     video: video,
+                    cache: _cache,
                     isActive: i == _activePage,
-                    controllerFuture: _cache.getOrCreate(video.videoPath),
+                    shouldPrepare: (i - _activePage).abs() <= 1,
                   );
                 },
               ),
@@ -122,7 +127,7 @@ class _CloseButton extends StatelessWidget {
       child: Container(
         width: 38,
         height: 38,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.black54,
           shape: BoxShape.circle,
         ),

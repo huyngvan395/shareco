@@ -3,11 +3,17 @@ import 'package:shareco/features/comment/domain/entities/comment_entity.dart';
 
 abstract class CommentState extends Equatable {
   const CommentState();
-  @override List<Object?> get props => [];
+  @override
+  List<Object?> get props => [];
 }
 
-class CommentInitial extends CommentState { const CommentInitial(); }
-class CommentLoading extends CommentState { const CommentLoading(); }
+class CommentInitial extends CommentState {
+  const CommentInitial();
+}
+
+class CommentLoading extends CommentState {
+  const CommentLoading();
+}
 
 class CommentLoaded extends CommentState {
   final String videoId;
@@ -26,27 +32,44 @@ class CommentLoaded extends CommentState {
     this.isPosting = false,
   });
 
+  int get totalCommentCount {
+    var total = comments.length;
+    for (final c in comments) {
+      total += c.replyCount > c.replies.length ? c.replyCount : c.replies.length;
+    }
+    return total;
+  }
+
   CommentLoaded copyWith({
     List<CommentEntity>? comments,
     bool? isLoadingMore,
     bool? hasReachedMax,
     int? currentPage,
     bool? isPosting,
-  }) => CommentLoaded(
-    videoId: videoId,
-    comments: comments ?? this.comments,
-    isLoadingMore: isLoadingMore ?? this.isLoadingMore,
-    hasReachedMax: hasReachedMax ?? this.hasReachedMax,
-    currentPage: currentPage ?? this.currentPage,
-    isPosting: isPosting ?? this.isPosting,
-  );
+  }) =>
+      CommentLoaded(
+        videoId: videoId,
+        comments: comments ?? this.comments,
+        isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+        hasReachedMax: hasReachedMax ?? this.hasReachedMax,
+        currentPage: currentPage ?? this.currentPage,
+        isPosting: isPosting ?? this.isPosting,
+      );
 
   @override
-  List<Object?> get props => [videoId, comments, isLoadingMore, hasReachedMax, isPosting];
+  List<Object?> get props => [
+        videoId,
+        comments,
+        isLoadingMore,
+        hasReachedMax,
+        currentPage,
+        isPosting,
+      ];
 }
 
 class CommentError extends CommentState {
   final String message;
   const CommentError(this.message);
-  @override List<Object?> get props => [message];
+  @override
+  List<Object?> get props => [message];
 }

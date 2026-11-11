@@ -10,5 +10,10 @@ abstract class OrderRepository {
 
   Future<Either<Failure, EcommerceOrder>> getOrderDetail(String orderId);
 
-  Future<Either<Failure, EcommerceOrder>> cancelOrder(String orderId);
+  Future<Either<Failure, EcommerceOrder>> cancelOrder(
+    String orderId, {
+    String? reason,
+  });
+
+  Future<Either<Failure, EcommerceOrder>> confirmOrderDelivered(String orderId);
 }

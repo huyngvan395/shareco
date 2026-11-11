@@ -9,6 +9,10 @@ class CommentEntity extends Equatable {
   final String userId;
   final ProfileStub user;
   final String? parentId;
+  final String? rootId;
+  final String? replyToUsername;
+  final String? replyToDisplayName;
+  final String? replyToContent;
   final String content;
   final int likeCount;
   final int replyCount;
@@ -16,7 +20,11 @@ class CommentEntity extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isLiked;
-  final List<CommentEntity> replies; // chỉ load khi expand
+  final List<CommentEntity> replies;
+  final int loadedReplyPage;
+  final bool hasMoreReplies;
+  final bool isLoadingReplies;
+  final bool isRepliesCollapsed;
 
   const CommentEntity({
     required this.id,
@@ -24,6 +32,10 @@ class CommentEntity extends Equatable {
     required this.userId,
     required this.user,
     this.parentId,
+    this.rootId,
+    this.replyToUsername,
+    this.replyToDisplayName,
+    this.replyToContent,
     required this.content,
     this.likeCount = 0,
     this.replyCount = 0,
@@ -32,12 +44,25 @@ class CommentEntity extends Equatable {
     required this.updatedAt,
     this.isLiked = false,
     this.replies = const [],
+    this.loadedReplyPage = -1,
+    this.hasMoreReplies = false,
+    this.isLoadingReplies = false,
+    this.isRepliesCollapsed = false,
   });
 
   CommentEntity copyWith({
+    String? rootId,
+    String? replyToUsername,
+    String? replyToDisplayName,
+    String? replyToContent,
     bool? isLiked,
     int? likeCount,
+    int? replyCount,
     List<CommentEntity>? replies,
+    int? loadedReplyPage,
+    bool? hasMoreReplies,
+    bool? isLoadingReplies,
+    bool? isRepliesCollapsed,
   }) =>
       CommentEntity(
         id: id,
@@ -45,17 +70,41 @@ class CommentEntity extends Equatable {
         userId: userId,
         user: user,
         parentId: parentId,
+        rootId: rootId ?? this.rootId,
+        replyToUsername: replyToUsername ?? this.replyToUsername,
+        replyToDisplayName: replyToDisplayName ?? this.replyToDisplayName,
+        replyToContent: replyToContent ?? this.replyToContent,
         content: content,
         likeCount: likeCount ?? this.likeCount,
-        replyCount: replyCount,
+        replyCount: replyCount ?? this.replyCount,
         status: status,
         createdAt: createdAt,
         updatedAt: updatedAt,
         isLiked: isLiked ?? this.isLiked,
         replies: replies ?? this.replies,
+        loadedReplyPage: loadedReplyPage ?? this.loadedReplyPage,
+        hasMoreReplies: hasMoreReplies ?? this.hasMoreReplies,
+        isLoadingReplies: isLoadingReplies ?? this.isLoadingReplies,
+        isRepliesCollapsed: isRepliesCollapsed ?? this.isRepliesCollapsed,
       );
 
   @override
-  List<Object?> get props =>
-      [id, videoId, userId, content, likeCount, isLiked, replies];
+  List<Object?> get props => [
+        id,
+        videoId,
+        userId,
+        parentId,
+        rootId,
+        replyToUsername,
+        replyToContent,
+        content,
+        likeCount,
+        replyCount,
+        isLiked,
+        replies,
+        loadedReplyPage,
+        hasMoreReplies,
+        isLoadingReplies,
+        isRepliesCollapsed,
+      ];
 }

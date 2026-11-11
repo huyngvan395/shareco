@@ -55,6 +55,15 @@ class FeedCommentChanged extends FeedEvent {
   List<Object?> get props => [videoId, delta];
 }
 
+class FeedAuthChanged extends FeedEvent {
+  final bool isAuthenticated;
+
+  const FeedAuthChanged({required this.isAuthenticated});
+
+  @override
+  List<Object?> get props => [isAuthenticated];
+}
+
 enum FeedTab { forYou, following }
 
 

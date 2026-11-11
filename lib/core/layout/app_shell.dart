@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../di/injector.dart';
+import '../services/notifications/push_notification_service.dart';
 import '../services/supabase/presence_service.dart';
 
 class AppShell extends StatefulWidget {
@@ -15,7 +17,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell>
     with WidgetsBindingObserver {
-  final _presence = PresenceService();
+  PresenceService get _presence => sl<PresenceService>();
 
   @override
   void initState() {
@@ -33,6 +35,9 @@ class _AppShellState extends State<AppShell>
     switch (state) {
       case AppLifecycleState.resumed:
         _presence.setOnline();
+        if (sl.isRegistered<PushNotificationService>()) {
+          sl<PushNotificationService>().refreshUnreadSummary();
+        }
         break;
 
       case AppLifecycleState.inactive:

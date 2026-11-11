@@ -525,6 +525,27 @@ class AppTextField extends StatefulWidget {
 
 class _AppTextFieldState extends State<AppTextField> {
   bool _obscure = true;
+  final FocusNode _focusNode = FocusNode();
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (mounted) {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -535,38 +556,115 @@ class _AppTextFieldState extends State<AppTextField> {
         if (widget.label != null) ...[
           Text(
             widget.label!,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: AppSizes.fontLg,
+            style: TextStyle(
+              color: _isFocused ? Colors.white : AppColors.textSecondary,
+              fontSize: AppSizes.fontMd,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: AppSizes.xs),
+          const SizedBox(height: 6),
         ],
-        TextFormField(
-          controller: widget.controller,
-          validator: widget.validator,
-          keyboardType: widget.keyboardType,
-          obscureText: widget.isPassword && _obscure,
-          maxLines: widget.isPassword ? 1 : widget.maxLines,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: AppSizes.fontLg,
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: _isFocused
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.16),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : const [],
           ),
-          decoration: InputDecoration(
-            hintText: widget.hint,
-            hintStyle: const TextStyle(color: AppColors.textMuted),
-            prefixIcon: widget.prefixIcon,
-            suffixIcon: widget.isPassword
-                ? IconButton(
-              icon: Icon(
-                _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          child: TextFormField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            validator: widget.validator,
+            keyboardType: widget.keyboardType,
+            obscureText: widget.isPassword && _obscure,
+            maxLines: widget.isPassword ? 1 : widget.maxLines,
+            cursorColor: AppColors.primary,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: AppSizes.fontLg,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              hintStyle: const TextStyle(
                 color: AppColors.textMuted,
-                size: AppSizes.iconMd,
+                fontSize: AppSizes.fontMd,
+                fontWeight: FontWeight.w400,
               ),
-              onPressed: () => setState(() => _obscure = !_obscure),
-            )
-                : null,
+              filled: true,
+              fillColor: _isFocused
+                  ? AppColors.surfaceElevated
+                  : AppColors.surfaceCard,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 15,
+              ),
+              prefixIcon: widget.prefixIcon != null
+                  ? IconTheme(
+                      data: IconThemeData(
+                        color: _isFocused
+                            ? AppColors.primary
+                            : AppColors.textMuted,
+                        size: 20,
+                      ),
+                      child: widget.prefixIcon!,
+                    )
+                  : null,
+              suffixIcon: widget.isPassword
+                  ? IconButton(
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: _isFocused
+                            ? Colors.white70
+                            : AppColors.textMuted,
+                        size: AppSizes.iconMd,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.borderSubtle),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.borderSubtle),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: AppColors.primary,
+                  width: 1.5,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: AppColors.error,
+                  width: 1.2,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: AppColors.error,
+                  width: 1.5,
+                ),
+              ),
+              errorStyle: const TextStyle(
+                color: AppColors.primarySoft,
+                fontSize: 12,
+              ),
+            ),
           ),
         ),
       ],
